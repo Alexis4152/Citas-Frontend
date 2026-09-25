@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Azul por default — hasta que HospitalConfigContext aplique el color configurado
+     por el admin del hospital. Formato "R G B" (sin comas): lo necesita
+     rgb(var(--x) / <alpha>) en tailwind.config.js */
+  --brand-50: 238 246 255;
+  --brand-100: 219 238 255;
+  --brand-200: 179 221 255;
+  --brand-300: 125 194 255;
+  --brand-400: 74 168 255;
+  --brand-500: 43 132 245;
+  --brand-600: 21 93 234;
+  --brand-700: 13 63 176;
+  --brand-800: 10 47 134;
+  --brand-900: 8 36 99;
+  --brand-sidebar: #050b18;
+  --brand-sidebar-border: #0d1b3d;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-white hover:bg-gray-50 text-gray-700 font-medium px-4 py-2 rounded-lg border border-gray-300 transition-colors;
+  }
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition-colors;
+  }
+  .input {
+    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100;
+  }
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+}

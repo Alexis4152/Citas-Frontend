@@ -1,0 +1,19 @@
+# Dependencias y compilacion
+node_modules/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Variables de entorno locales (VITE_* se define en Coolify al construir)
+.env
+.env.*
+!.env.example
+
+# IDEs y sistema
+.idea/
+.vscode/
+.claude/
+.DS_Store
+Thumbs.db
