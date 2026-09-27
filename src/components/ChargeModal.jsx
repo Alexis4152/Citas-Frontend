@@ -7,6 +7,7 @@ import { formatMoney, hasPrice } from '../utils/money'
 import { formatDateOnly, formatTimeOnly } from '../utils/format'
 import CardFields from './CardFields'
 import Modal from './Modal'
+import { staffBasePath } from '../utils/staffPath'
 
 const METHODS = [
   { value: 'CASH', label: 'Efectivo', icon: '💵' },
@@ -22,7 +23,7 @@ const METHODS = [
 export default function ChargeModal({ appointment, onClose, onPaid }) {
   const { notify } = useNotify()
   const location = useLocation()
-  const cutPath = location.pathname.startsWith('/admin') ? '/admin/corte' : '/recepcion/corte'
+  const cutPath = `${staffBasePath(location.pathname)}/corte`
 
   const [cut, setCut] = useState(undefined) // undefined = cargando, null = sin corte abierto
   const [pending, setPending] = useState(null) // transferencia SPEI pendiente de esta cita

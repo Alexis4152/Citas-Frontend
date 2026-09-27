@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { HospitalConfigProvider } from './context/HospitalConfigContext'
 import { AuthProvider } from './context/AuthContext'
 import { NotifyProvider } from './context/NotifyContext'
@@ -51,10 +51,13 @@ import AdminPayments from './pages/admin/AdminPayments'
 const DOCTOR_LINKS = [
   { to: '/doctor', end: true, icon: '📅', label: 'Mi agenda' },
   { to: '/doctor/citas', icon: '📋', label: 'Mis citas' },
+  { to: '/doctor/pacientes', icon: '👥', label: 'Pacientes' },
   { to: '/doctor/recetas', icon: '💊', label: 'Recetas' },
+  { to: '/doctor/cobro', icon: '💵', label: 'Cobrar' },
+  { to: '/doctor/corte', icon: '🧾', label: 'Corte de caja' },
   { to: '/doctor/cobros', icon: '💰', label: 'Cobros' },
   { to: '/doctor/horario', icon: '🕒', label: 'Mi horario' },
-  { to: '/doctor/excepciones', icon: '🚫', label: 'Excepciones' },
+  { to: '/doctor/ausencias', icon: '🏖️', label: 'Ausencias' },
 ]
 
 const RECEPTION_LINKS = [
@@ -63,7 +66,6 @@ const RECEPTION_LINKS = [
   { to: '/recepcion/nueva-cita', icon: '➕', label: 'Nueva cita' },
   { to: '/recepcion/cobro', icon: '💵', label: 'Cobrar' },
   { to: '/recepcion/agenda-doctores', icon: '🗓️', label: 'Agenda doctores' },
-  { to: '/recepcion/pacientes', icon: '👥', label: 'Pacientes' },
   { to: '/recepcion/corte', icon: '🧾', label: 'Corte de caja' },
 ]
 
@@ -119,9 +121,17 @@ export default function App() {
                 <Route index element={<DoctorAgenda />} />
                 <Route path="citas" element={<DoctorMyAppointments />} />
                 <Route path="recetas" element={<DoctorPrescriptions />} />
+                {/* Mismos módulos que recepción; el backend los acota a los pacientes y citas del
+                    propio doctor (ver DoctorScope). */}
+                <Route path="pacientes" element={<ReceptionPatients />} />
+                <Route path="pacientes/:id" element={<ReceptionPatientDetail />} />
+                <Route path="cobro" element={<ReceptionCharge />} />
+                <Route path="corte" element={<ReceptionCashCut />} />
                 <Route path="cobros" element={<DoctorIncome />} />
                 <Route path="horario" element={<DoctorSchedule />} />
-                <Route path="excepciones" element={<DoctorScheduleExceptions />} />
+                <Route path="ausencias" element={<DoctorScheduleExceptions />} />
+                {/* Nombre anterior del módulo: los enlaces guardados siguen funcionando. */}
+                <Route path="excepciones" element={<Navigate to="/doctor/ausencias" replace />} />
               </Route>
 
               <Route
@@ -136,8 +146,7 @@ export default function App() {
                 <Route path="citas" element={<ReceptionAppointments />} />
                 <Route path="nueva-cita" element={<ReceptionNewAppointment />} />
                 <Route path="agenda-doctores" element={<ReceptionDoctorAgenda />} />
-                <Route path="pacientes" element={<ReceptionPatients />} />
-                <Route path="pacientes/:id" element={<ReceptionPatientDetail />} />
+                {/* El módulo de pacientes es solo del panel administrativo (/admin/pacientes). */}
                 <Route path="corte" element={<ReceptionCashCut />} />
                 <Route path="cobro" element={<ReceptionCharge />} />
               </Route>

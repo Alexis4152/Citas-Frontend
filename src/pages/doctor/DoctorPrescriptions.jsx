@@ -4,6 +4,7 @@ import { useNotify } from '../../context/NotifyContext'
 import { formatDate, formatDateOnly } from '../../utils/format'
 import { downloadBlob } from '../../utils/media'
 import AdminPagination from '../../components/AdminPagination'
+import PrescriptionViewModal from '../../components/PrescriptionViewModal'
 import useDebouncedValue from '../../hooks/useDebouncedValue'
 
 /**
@@ -25,6 +26,7 @@ export default function DoctorPrescriptions() {
   const [size, setSize] = useState(20)
   const [result, setResult] = useState({ content: [], page: 0, totalPages: 0, totalElements: 0 })
   const [loadingList, setLoadingList] = useState(true)
+  const [viewing, setViewing] = useState(null)
 
   useEffect(() => {
     getOwnProfile().then((r) => {
@@ -125,8 +127,11 @@ export default function DoctorPrescriptions() {
                       <td className="px-4 py-3 font-medium text-gray-900">{p.patientName}</td>
                       <td className="px-4 py-3 text-gray-600 capitalize">{formatDateOnly(p.appointmentDate)}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(p.createdAt)}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{p.content}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate cursor-pointer hover:text-gray-900" title="Ver receta completa" onClick={() => setViewing(p)}>{p.content}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap space-x-3">
+                        <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => setViewing(p)}>
+                          Ver
+                        </button>
                         <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => handleDownload(p.id)}>
                           Descargar PDF
                         </button>
@@ -145,12 +150,17 @@ export default function DoctorPrescriptions() {
                 <div key={p.id} className="px-4 py-3">
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-medium text-gray-900">{p.patientName}</p>
-                    <button className="text-primary-700 text-xs font-medium hover:underline shrink-0" onClick={() => handleDownload(p.id)}>
-                      Descargar PDF
-                    </button>
+                    <div className="shrink-0 space-x-3">
+                      <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => setViewing(p)}>
+                        Ver
+                      </button>
+                      <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => handleDownload(p.id)}>
+                        Descargar PDF
+                      </button>
+                    </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5 capitalize">Cita: {formatDateOnly(p.appointmentDate)} · Emitida: {formatDate(p.createdAt)}</p>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{p.content}</p>
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2" onClick={() => setViewing(p)}>{p.content}</p>
                 </div>
               ))}
               {result.content.length === 0 && (
@@ -165,6 +175,10 @@ export default function DoctorPrescriptions() {
           onPageChange={setPage} onSizeChange={(s) => { setSize(s); setPage(0) }}
         />
       </div>
+
+      {viewing && (
+        <PrescriptionViewModal prescription={viewing} onClose={() => setViewing(null)} onDownload={handleDownload} />
+      )}
     </div>
   )
 }

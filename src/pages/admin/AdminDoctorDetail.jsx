@@ -166,9 +166,9 @@ export default function AdminDoctorDetail() {
         </div>
 
         <div className="card p-5">
-          <h2 className="font-semibold text-gray-900 mb-3">Excepciones de agenda</h2>
+          <h2 className="font-semibold text-gray-900 mb-3">Ausencias</h2>
           {exceptions.length === 0 ? (
-            <p className="text-sm text-gray-400">Sin excepciones registradas.</p>
+            <p className="text-sm text-gray-400">Sin ausencias registradas.</p>
           ) : (
             <ul className="space-y-1.5 text-sm">
               {exceptions.map((e) => (

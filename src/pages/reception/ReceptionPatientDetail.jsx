@@ -9,7 +9,9 @@ import { downloadBlob } from '../../utils/media'
 import { useNotify } from '../../context/NotifyContext'
 import AdminPagination from '../../components/AdminPagination'
 import Modal from '../../components/Modal'
+import PrescriptionViewModal from '../../components/PrescriptionViewModal'
 import MedicalInfoFields, { EMPTY_MEDICAL_INFO, allergiesLabel, bloodTypeLabel, fromPatientResponse, toMedicalInfoPayload } from '../../components/MedicalInfoFields'
+import { staffBasePath } from '../../utils/staffPath'
 
 const STATUS_TABS = [
   { value: '', label: 'Todas' },
@@ -35,7 +37,7 @@ const CANCELLED_BY_LABEL = {
  */
 export default function ReceptionPatientDetail() {
   const { id } = useParams()
-  const basePath = useLocation().pathname.startsWith('/admin') ? '/admin' : '/recepcion'
+  const basePath = staffBasePath(useLocation().pathname)
   const { notify, confirmDialog } = useNotify()
   const [patient, setPatient] = useState(null)
   const [loadingProfile, setLoadingProfile] = useState(true)
@@ -52,6 +54,7 @@ export default function ReceptionPatientDetail() {
   const [loadingAppointments, setLoadingAppointments] = useState(true)
 
   const [prescriptions, setPrescriptions] = useState([])
+  const [viewingPrescription, setViewingPrescription] = useState(null)
   // Posibles duplicados (mismo teléfono o correo) y fusión de registros.
   const [duplicates, setDuplicates] = useState([])
   const [merging, setMerging] = useState(false)
@@ -236,12 +239,20 @@ export default function ReceptionPatientDetail() {
                   <p className="text-gray-500 text-xs">Cita del {formatDateOnly(p.appointmentDate)} · emitida el {formatDate(p.createdAt)}</p>
                   {p.voided && p.voidReason && <p className="text-red-500 text-xs">Motivo de la anulación: {p.voidReason}</p>}
                 </div>
-                <button
-                  className="text-primary-700 text-xs font-medium hover:underline shrink-0"
-                  onClick={() => handleDownloadPrescription(p.id)}
-                >
-                  Descargar PDF
-                </button>
+                <div className="shrink-0 space-x-3">
+                  <button
+                    className="text-primary-700 text-xs font-medium hover:underline"
+                    onClick={() => setViewingPrescription({ ...p, patientName: p.patientName || `${patient?.firstName ?? ''} ${patient?.lastName ?? ''}`.trim() })}
+                  >
+                    Ver
+                  </button>
+                  <button
+                    className="text-primary-700 text-xs font-medium hover:underline"
+                    onClick={() => handleDownloadPrescription(p.id)}
+                  >
+                    Descargar PDF
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -334,6 +345,14 @@ export default function ReceptionPatientDetail() {
           onPageChange={setPage} onSizeChange={(s) => { setSize(s); setPage(0) }}
         />
       </div>
+
+      {viewingPrescription && (
+        <PrescriptionViewModal
+          prescription={viewingPrescription}
+          onClose={() => setViewingPrescription(null)}
+          onDownload={handleDownloadPrescription}
+        />
+      )}
     </div>
   )
 }

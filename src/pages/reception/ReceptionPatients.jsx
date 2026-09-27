@@ -11,15 +11,17 @@ import Modal from '../../components/Modal'
 import MedicalInfoFields, { EMPTY_MEDICAL_INFO, toMedicalInfoPayload } from '../../components/MedicalInfoFields'
 import useDebouncedValue from '../../hooks/useDebouncedValue'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../../utils/phone'
+import { staffBasePath } from '../../utils/staffPath'
 
 const EMPTY_PATIENT = { firstName: '', lastName: '', phone: '', email: '', createAccount: false }
 
 export default function ReceptionPatients() {
   const navigate = useNavigate()
-  // Misma pantalla para recepción y admin: los enlaces se quedan dentro del panel actual.
-  const basePath = useLocation().pathname.startsWith('/admin') ? '/admin' : '/recepcion'
+  // Misma pantalla para recepción, doctor y admin: los enlaces se quedan dentro del panel actual.
+  const basePath = staffBasePath(useLocation().pathname)
   const { notify } = useNotify()
   const { user } = useAuth()
+  const isDoctorPanel = user?.role === 'DOCTOR'
   // null = recepcionista general (o admin), sin restricción -- mismo criterio que Citas.
   const allowedSpecialtyIds = user?.specialties?.length ? new Set(user.specialties.map((s) => s.id)) : null
   const [specialties, setSpecialties] = useState([])
@@ -199,6 +201,8 @@ export default function ReceptionPatients() {
           <label className="text-xs font-medium text-gray-600 block mb-1">Nombre, correo o teléfono</label>
           <input className="input" placeholder="Buscar..." value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
+        {/* El doctor solo ve a sus propios pacientes: filtrar por doctor/especialidad no aplica. */}
+        {!isDoctorPanel && (<>
         <div className="min-w-[180px]">
           <label className="text-xs font-medium text-gray-600 block mb-1">Especialidad</label>
           <select className="input" value={specialtyId} onChange={(e) => handleSpecialtyChange(e.target.value)}>
@@ -210,6 +214,7 @@ export default function ReceptionPatients() {
           <label className="text-xs font-medium text-gray-600 block mb-1">Doctor</label>
           <SearchableSelect options={doctorOptions} value={doctorId} onChange={setDoctorId} />
         </div>
+        </>)}
         {(query || specialtyId || doctorId) && (
           <button type="button" className="btn-secondary text-sm" onClick={handleClearSearch}>
             Limpiar

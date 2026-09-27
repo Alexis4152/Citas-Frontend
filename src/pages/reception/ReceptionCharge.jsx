@@ -9,6 +9,7 @@ import StatusBadge, { AppointmentFlags, PaymentBadge } from '../../components/St
 import ChargeModal from '../../components/ChargeModal'
 import QrScannerModal from '../../components/QrScannerModal'
 import usePolling from '../../hooks/usePolling'
+import { staffBasePath } from '../../utils/staffPath'
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 const FOLIO_RE = /^#?\d{1,9}$/
@@ -32,7 +33,7 @@ function chargeability(a) {
  */
 export default function ReceptionCharge() {
   const { notify } = useNotify()
-  const cutPath = useLocation().pathname.startsWith('/admin') ? '/admin/corte' : '/recepcion/corte'
+  const cutPath = `${staffBasePath(useLocation().pathname)}/corte`
   const inputRef = useRef(null)
   const [query, setQuery] = useState('')
   const [activeQuery, setActiveQuery] = useState('')

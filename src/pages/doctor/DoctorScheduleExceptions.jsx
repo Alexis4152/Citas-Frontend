@@ -51,26 +51,26 @@ export default function DoctorScheduleExceptions() {
       const affected = res.data.data?.affectedAppointments || 0
       if (affected > 0) {
         // El bloqueo se guardó, pero esas citas siguen programadas: hay que moverlas.
-        notify(`Excepción creada, pero ese día tienes ${affected} cita(s) programada(s). Recepción ya fue avisada para reprogramarlas.`, 'error')
+        notify(`Ausencia registrada, pero ese día tienes ${affected} cita(s) programada(s). Recepción ya fue avisada para reprogramarlas.`, 'error')
       } else {
-        notify('Excepción de agenda creada', 'success')
+        notify('Ausencia registrada', 'success')
       }
       setModalOpen(false)
       load()
     } catch (err) {
-      notify(err.response?.data?.message || 'No se pudo crear la excepción', 'error')
+      notify(err.response?.data?.message || 'No se pudo registrar la ausencia', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   async function handleDelete(id) {
-    const ok = await confirmDialog('¿Eliminar esta excepción de agenda?', { confirmText: 'Eliminar' })
+    const ok = await confirmDialog('¿Eliminar esta ausencia? Ese horario volverá a estar disponible para citas.', { confirmText: 'Eliminar' })
     if (!ok) return
     setDeletingId(id)
     try {
       await deleteOwnScheduleException(id)
-      notify('Excepción eliminada', 'success')
+      notify('Ausencia eliminada', 'success')
       load()
     } catch (err) {
       notify(err.response?.data?.message || 'No se pudo eliminar', 'error')
@@ -83,22 +83,22 @@ export default function DoctorScheduleExceptions() {
     <div>
       <div className="flex items-start justify-between gap-3 flex-wrap mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Excepciones de agenda</h1>
-          <p className="text-sm text-gray-500 mt-1">Bloquea días completos u horarios puntuales (vacaciones, permisos, congresos, etc.)</p>
+          <h1 className="text-2xl font-bold text-gray-900">Ausencias</h1>
+          <p className="text-sm text-gray-500 mt-1">Días u horas en los que no vas a atender (vacaciones, permisos, congresos, etc.). En esos horarios no se podrán agendar citas contigo.</p>
         </div>
-        <button className="btn-primary text-sm" onClick={openCreate}>+ Agregar excepción</button>
+        <button className="btn-primary text-sm" onClick={openCreate}>+ Registrar ausencia</button>
       </div>
 
       <div className="card p-0 overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-700">Excepciones registradas {exceptions.length > 0 && `(${exceptions.length})`}</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Ausencias registradas {exceptions.length > 0 && `(${exceptions.length})`}</h2>
         </div>
         {loading ? (
           <p className="text-gray-500 text-sm p-4">Cargando...</p>
         ) : exceptions.length === 0 ? (
           <div className="py-14 text-center text-gray-400">
             <p className="text-3xl mb-2">🗓️</p>
-            <p className="text-sm">Sin excepciones registradas</p>
+            <p className="text-sm">No tienes ausencias registradas</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -125,7 +125,7 @@ export default function DoctorScheduleExceptions() {
                 <button
                   onClick={() => handleDelete(ex.id)}
                   disabled={deletingId === ex.id}
-                  title="Eliminar excepción"
+                  title="Eliminar ausencia"
                   className="text-gray-400 hover:text-red-600 disabled:opacity-50 shrink-0 text-lg"
                 >
                   {deletingId === ex.id ? '…' : '🗑️'}
@@ -137,7 +137,7 @@ export default function DoctorScheduleExceptions() {
       </div>
 
       {modalOpen && (
-        <Modal title="Nueva excepción" onClose={() => setModalOpen(false)}>
+        <Modal title="Registrar ausencia" onClose={() => setModalOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Fecha">
@@ -181,7 +181,7 @@ export default function DoctorScheduleExceptions() {
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
-              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Crear excepción'}</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Registrar ausencia'}</button>
             </div>
           </form>
         </Modal>
