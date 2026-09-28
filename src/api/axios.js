@@ -1,3 +1,4 @@
+import { getHospitalSlug, hospitalPath, sessionStorageKey } from '../tenant'
 import axios from 'axios'
 
 /** Instancia central de axios. En dev usa `/api` (proxy de Vite hacia el backend en
@@ -19,6 +20,9 @@ export function getAccessToken() {
 
 api.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
+  // Hospital del link /c/<slug>: el backend filtra todo por él (ver tenant.js).
+  const slug = getHospitalSlug()
+  if (slug) config.headers['X-Hospital'] = slug
   return config
 })
 
@@ -67,8 +71,8 @@ api.interceptors.response.use(
         return api(originalRequest)
       } catch (refreshError) {
         setAccessToken(null)
-        localStorage.removeItem('hospital_user')
-        window.location.href = '/login'
+        localStorage.removeItem(sessionStorageKey())
+        window.location.href = hospitalPath('/login')
         return Promise.reject(refreshError)
       }
     }

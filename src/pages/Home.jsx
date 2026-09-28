@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from '../router'
 import { useAuth } from '../context/AuthContext'
 import { useHospitalConfig } from '../context/HospitalConfigContext'
 

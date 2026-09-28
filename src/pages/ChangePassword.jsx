@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from '../router'
 import { changePassword } from '../api/auth'
 import { useAuth } from '../context/AuthContext'
 import { useNotify } from '../context/NotifyContext'

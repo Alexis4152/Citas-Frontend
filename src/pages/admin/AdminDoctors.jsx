@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from '../../router'
 import { adminListDoctors } from '../../api/adminDoctors'
 import { getSpecialties, getBranches } from '../../api/publicCatalog'
 import AdminPagination from '../../components/AdminPagination'

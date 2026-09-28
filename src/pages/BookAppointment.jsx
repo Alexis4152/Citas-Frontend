@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { useNavigate } from '../router'
 import { getSpecialties, searchDoctors, getDoctorAvailability } from '../api/publicCatalog'
 import { bookGuestAppointment, bookOwnAppointment } from '../api/appointments'
 import { prepayByToken, prepayOwn } from '../api/payments'
@@ -11,7 +12,7 @@ import RecommendationsNotice from '../components/RecommendationsNotice'
 import MedicalInfoFields, { EMPTY_MEDICAL_INFO, toMedicalInfoPayload } from '../components/MedicalInfoFields'
 import WizardSteps from '../components/WizardSteps'
 import CardFields from '../components/CardFields'
-import { EMPTY_CARD, tokenizeFields } from '../utils/openpay'
+import { EMPTY_CARD, isOnlinePaymentEnabled, tokenizeFields } from '../utils/openpay'
 import { formatMoney, hasPrice } from '../utils/money'
 import { formatDateOnly, formatTimeOnly } from '../utils/format'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../utils/phone'
@@ -65,6 +66,9 @@ export default function BookAppointment() {
   // Paso 5: cómo se paga. RECEPTION = al terminar la consulta; CARD/SPEI = pago anticipado con OpenPay.
   const [payChoice, setPayChoice] = useState('RECEPTION')
   const [card, setCard] = useState(EMPTY_CARD)
+  // Solo si el hospital tiene su cuenta de OpenPay; si no, se paga en recepción.
+  const [onlinePayments, setOnlinePayments] = useState(false)
+  useEffect(() => { isOnlinePaymentEnabled().then(setOnlinePayments) }, [])
 
   function computeInitialStep() {
     if (!initialDoctor) return 0
@@ -345,7 +349,7 @@ export default function BookAppointment() {
                       { value: 'RECEPTION', title: 'Pagar en recepción', hint: 'Pagas al terminar tu consulta, en efectivo o con tarjeta.' },
                       { value: 'CARD', title: 'Pago anticipado con tarjeta', hint: 'Cobro inmediato y seguro con OpenPay.' },
                       { value: 'SPEI', title: 'Pago anticipado por transferencia (SPEI)', hint: 'Te mostramos la CLABE al confirmar; tu cita se marca pagada al acreditarse.' },
-                    ].map((o) => (
+                    ].filter((o) => onlinePayments || o.value === 'RECEPTION').map((o) => (
                       <label
                         key={o.value}
                         className={`flex items-start gap-2 border rounded-lg p-3 cursor-pointer text-sm transition-colors ${

@@ -1,4 +1,6 @@
-import { Navigate, useLocation } from 'react-router-dom'
+import { stripHospitalPrefix } from '../tenant'
+import { useLocation } from 'react-router-dom'
+import { Navigate } from '../router'
 import { useAuth } from '../context/AuthContext'
 
 /**
@@ -17,7 +19,7 @@ export default function PrivateRoute({ children, roles }) {
     return <div className="flex items-center justify-center h-screen text-gray-500">Cargando...</div>
   }
   if (!user) return <Navigate to="/login" replace />
-  if (user.mustChangePassword && location.pathname !== '/cambiar-password') {
+  if (user.mustChangePassword && stripHospitalPrefix(location.pathname) !== '/cambiar-password') {
     return <Navigate to="/cambiar-password" replace />
   }
   if (roles && !roles.includes(role)) return <Navigate to="/" replace />

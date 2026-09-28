@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
+import { useNavigate } from '../../router'
 import {
   searchAppointments, cancelAppointment, releaseAppointmentSlot, downloadAppointmentReceipt,
   markAppointmentCompleted, markAppointmentNoShow, markAppointmentArrived,

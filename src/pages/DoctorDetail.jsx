@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { useNavigate } from '../router'
 import { getDoctorDetail, getDoctorAvailability } from '../api/publicCatalog'
 import AvailabilityCalendar from '../components/AvailabilityCalendar'
 import { resolveMediaUrl } from '../utils/media'

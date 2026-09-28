@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { Link } from '../router'
 import { chargeAppointment, getCurrentCashCut, listAppointmentPayments, refreshPayment } from '../api/payments'
 import { useNotify } from '../context/NotifyContext'
-import { EMPTY_CARD, tokenizeFields } from '../utils/openpay'
+import { EMPTY_CARD, isOnlinePaymentEnabled, tokenizeFields } from '../utils/openpay'
 import { formatMoney, hasPrice } from '../utils/money'
 import { formatDateOnly, formatTimeOnly } from '../utils/format'
 import CardFields from './CardFields'
@@ -32,6 +33,9 @@ export default function ChargeModal({ appointment, onClose, onPaid }) {
   const [cashReceived, setCashReceived] = useState('')
   const [reference, setReference] = useState('')
   const [card, setCard] = useState(EMPTY_CARD)
+  // OpenPay solo aparece si el hospital tiene su cuenta configurada.
+  const [onlinePayments, setOnlinePayments] = useState(false)
+  useEffect(() => { isOnlinePaymentEnabled().then(setOnlinePayments) }, [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -138,7 +142,7 @@ export default function ChargeModal({ appointment, onClose, onPaid }) {
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            {METHODS.map((m) => (
+            {METHODS.filter((m) => onlinePayments || m.value !== 'OPENPAY_CARD').map((m) => (
               <button
                 type="button" key={m.value} onClick={() => setMethod(m.value)} disabled={busy}
                 className={`rounded-lg border px-2 py-3 text-xs font-medium flex flex-col items-center gap-1 transition-colors ${

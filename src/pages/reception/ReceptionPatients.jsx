@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { useNavigate } from '../../router'
 import { searchPatients, downloadPatientsTemplate, exportPatients, importPatients, createPatient } from '../../api/reception'
 import { getSpecialties, searchDoctors } from '../../api/publicCatalog'
 import { useAuth } from '../../context/AuthContext'

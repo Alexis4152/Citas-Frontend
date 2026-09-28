@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
+import { Link } from '../../router'
 import {
   getPatient, searchAppointments, updatePatientMedicalInfo, listPatientPrescriptions, downloadPrescriptionPdfStaff,
   listPatientDuplicates, mergePatients,
