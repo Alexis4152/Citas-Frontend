@@ -7,3 +7,4 @@ export const searchDoctors = (params) => api.get('/public/doctors', { params })
 export const getDoctorDetail = (id) => api.get(`/public/doctors/${id}`)
 export const getDoctorAvailability = (id, date, days = 7) =>
   api.get(`/public/doctors/${id}/availability`, { params: { date, days } })
+export const getAppointmentHospital = (token) => api.get(`/public/appointment-hospital/${token}`)

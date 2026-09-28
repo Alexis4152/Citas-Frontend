@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { Link } from '../../router'
 import { getCurrentCashCut } from '../../api/payments'
 import { lookupChargeAppointments } from '../../api/reception'
 import { useNotify } from '../../context/NotifyContext'

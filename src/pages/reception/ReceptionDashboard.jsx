@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '../../router'
 import { searchAppointments } from '../../api/reception'
 import { useAuth } from '../../context/AuthContext'
 import { formatTimeOnly, localTodayIso } from '../../utils/format'

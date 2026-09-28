@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from '../router'
 import { useAuth } from '../context/AuthContext'
 import { useHospitalConfig } from '../context/HospitalConfigContext'
 import useOutsideClick from '../hooks/useOutsideClick'

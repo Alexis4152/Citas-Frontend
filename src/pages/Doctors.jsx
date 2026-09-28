@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from '../router'
 import { getSpecialties, getBranches, searchDoctors } from '../api/publicCatalog'
 import { resolveMediaUrl } from '../utils/media'
 import AdminPagination from '../components/AdminPagination'

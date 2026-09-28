@@ -2,8 +2,18 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { applyDefaultBrand, applyStoreBrand } from '../utils/theme'
 import { resolveMediaUrl } from '../utils/media'
 import { getHospitalConfig } from '../api/publicCatalog'
+import { getHospitalSlug } from '../tenant'
 
 const HospitalConfigContext = createContext(null)
+
+const PLATFORM_CONFIG = {
+  name: 'Nexora Citas',
+  logoUrl: null,
+  primaryColor: '#155dea',
+  description: 'Agenda de citas para hospitales y consultorios.',
+  contactPhone: null,
+  contactEmail: null,
+}
 
 const DEFAULT_CONFIG = {
   name: 'Hospital San Rafael',
@@ -27,6 +37,13 @@ export function HospitalConfigProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(() => {
+    // Raíz del sitio (portada / panel del SUPER_ADMIN): no hay hospital del cual traer la marca.
+    if (!getHospitalSlug()) {
+      setConfig(PLATFORM_CONFIG)
+      applyDefaultBrand()
+      document.title = PLATFORM_CONFIG.name
+      return Promise.resolve(PLATFORM_CONFIG)
+    }
     return getHospitalConfig()
       .then((r) => {
         const data = r.data.data

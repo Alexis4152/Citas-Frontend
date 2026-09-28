@@ -1,3 +1,4 @@
+import { Link } from '../router'
 import { useHospitalConfig } from '../context/HospitalConfigContext'
 
 export default function Footer() {
@@ -21,8 +22,8 @@ export default function Footer() {
         <div>
           <h4 className="text-white font-semibold mb-3">Enlaces</h4>
           <ul className="space-y-1 text-gray-400">
-            <li><a href="/doctores" className="hover:text-white">Buscar doctor</a></li>
-            <li><a href="/cancelar-cita" className="hover:text-white">Cancelar o reprogramar una cita</a></li>
+            <li><Link to="/doctores" className="hover:text-white">Buscar doctor</Link></li>
+            <li><Link to="/cancelar-cita" className="hover:text-white">Cancelar o reprogramar una cita</Link></li>
           </ul>
         </div>
       </div>

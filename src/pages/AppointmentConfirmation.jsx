@@ -1,5 +1,7 @@
+import { hospitalPath } from '../tenant'
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { Link } from '../router'
 import { useAuth } from '../context/AuthContext'
 import { useNotify } from '../context/NotifyContext'
 import { downloadOwnReceipt, downloadGuestReceipt } from '../api/appointments'
@@ -114,7 +116,7 @@ export default function AppointmentConfirmation() {
                 to={`/cancelar-cita/${appointment.cancelToken}`}
                 className="text-primary-700 font-medium hover:underline break-all"
               >
-                {window.location.origin}/cancelar-cita/{appointment.cancelToken}
+                {window.location.origin}{hospitalPath('/cancelar-cita/')}{appointment.cancelToken}
               </Link>
             </div>
           )}

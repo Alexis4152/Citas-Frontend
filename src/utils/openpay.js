@@ -7,23 +7,46 @@
  * El SDK se carga con <script> en index.html (openpay.v1.min.js y openpay-data.v1.min.js).
  */
 import { getPaymentConfig } from '../api/payments'
+import { getHospitalSlug } from '../tenant'
 
+// Cada hospital cobra con SU cuenta de OpenPay: la configuración y la inicialización del SDK
+// son por hospital (slug del link).
 let config = null
-let initialized = false
+let configSlug = null
+let initializedSlug = null
+
+async function loadConfig() {
+  const slug = getHospitalSlug()
+  if (!config || configSlug !== slug) {
+    config = (await getPaymentConfig()).data.data
+    configSlug = slug
+  }
+  return config
+}
+
+/** ¿El hospital actual acepta pagos en línea? (sin llaves de OpenPay solo se paga en recepción) */
+export async function isOnlinePaymentEnabled() {
+  try {
+    return Boolean((await loadConfig()).enabled)
+  } catch {
+    return false
+  }
+}
 
 /** Inicializa el SDK una sola vez. Lanza un error legible si el navegador lo bloqueó. */
 export async function initOpenpay() {
   if (typeof window === 'undefined' || !window.OpenPay) {
     throw new Error('No se pudo cargar el módulo de pagos. Desactiva el bloqueador de anuncios e intenta de nuevo.')
   }
-  if (!config) {
-    config = (await getPaymentConfig()).data.data
+  const cfg = await loadConfig()
+  if (!cfg.enabled) {
+    throw new Error('Este hospital no acepta pagos en línea. Puedes pagar en recepción.')
   }
-  if (!initialized) {
-    window.OpenPay.setId(config.merchantId)
-    window.OpenPay.setApiKey(config.publicKey)
-    window.OpenPay.setSandboxMode(!!config.sandbox)
-    initialized = true
+  if (initializedSlug !== configSlug) {
+    window.OpenPay.setId(cfg.merchantId)
+    window.OpenPay.setApiKey(cfg.publicKey)
+    window.OpenPay.setSandboxMode(!!cfg.sandbox)
+    initializedSlug = configSlug
   }
 }
 

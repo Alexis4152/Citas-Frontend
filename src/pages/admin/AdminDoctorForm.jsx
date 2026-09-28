@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { useNavigate } from '../../router'
 import { adminCreateDoctor, adminUpdateDoctor, adminGetDoctor, adminUploadDoctorPhoto } from '../../api/adminDoctors'
 import { getSpecialties, getBranches } from '../../api/publicCatalog'
 import { resolveMediaUrl } from '../../utils/media'

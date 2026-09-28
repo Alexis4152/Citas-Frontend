@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
+import { NavLink, useNavigate } from '../router'
 import { useAuth } from '../context/AuthContext'
 import { useHospitalConfig } from '../context/HospitalConfigContext'
 import NotificationBell from '../components/NotificationBell'
@@ -15,7 +16,7 @@ const navLinkClass = ({ isActive }) =>
  * AdminLayout.jsx del proyecto de referencia, generalizado para recibir `links` y
  * `panelLabel` como props y así reutilizarse en los tres roles.
  */
-export default function StaffLayout({ links, panelLabel, showNotifications = false }) {
+export default function StaffLayout({ links, panelLabel, showNotifications = false, showPublicSiteLink = true }) {
   const { user, logout } = useAuth()
   const { config } = useHospitalConfig()
   const navigate = useNavigate()
@@ -52,7 +53,9 @@ export default function StaffLayout({ links, panelLabel, showNotifications = fal
         ))}
       </nav>
       <div className="p-4 border-t border-[var(--brand-sidebar-border)]">
-        <NavLink to="/" className="block text-xs text-slate-400 hover:text-white mb-2">← Volver al sitio público</NavLink>
+        {showPublicSiteLink && (
+          <NavLink to="/" className="block text-xs text-slate-400 hover:text-white mb-2">← Volver al sitio público</NavLink>
+        )}
         <p className="text-xs text-slate-500 mb-2">{user?.firstName} {user?.lastName}</p>
         <button
           onClick={handleLogout}

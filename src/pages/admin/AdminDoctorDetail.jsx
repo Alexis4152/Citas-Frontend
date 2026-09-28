@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { Link, useNavigate } from '../../router'
 import { adminGetDoctor, adminGetDoctorSchedule, adminGetDoctorScheduleExceptions, adminDeactivateDoctor } from '../../api/adminDoctors'
 import { searchAppointments } from '../../api/reception'
 import { resolveMediaUrl } from '../../utils/media'
