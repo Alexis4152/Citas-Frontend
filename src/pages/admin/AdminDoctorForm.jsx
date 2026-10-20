@@ -185,7 +185,7 @@ export default function AdminDoctorForm() {
   if (createdInfo) {
     return (
       <div className="max-w-lg">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Doctor creado</h1>
+        <h1 className="page-title mb-6">Doctor creado</h1>
         <div className="card p-6 space-y-4">
           <p className="text-sm text-gray-700">
             Comunícale estos datos de acceso al doctor. Se le pedirá cambiar la contraseña la
@@ -211,7 +211,7 @@ export default function AdminDoctorForm() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{isEdit ? 'Editar doctor' : 'Nuevo doctor'}</h1>
+      <h1 className="page-title mb-6">{isEdit ? 'Editar doctor' : 'Nuevo doctor'}</h1>
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

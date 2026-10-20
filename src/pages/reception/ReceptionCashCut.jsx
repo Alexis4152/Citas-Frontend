@@ -95,7 +95,7 @@ export default function ReceptionCashCut() {
     <div>
       <LoadingOverlay show={busy} message="Guardando..." />
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Corte de caja</h1>
+        <h1 className="page-title">Corte de caja</h1>
         <p className="text-sm text-gray-500 mt-1">Cada cobro que registras entra a tu corte. Al terminar tu turno, cuenta el efectivo y ciérralo.</p>
       </div>
 
@@ -146,7 +146,8 @@ export default function ReceptionCashCut() {
               {history.content.map((c) => {
                 const diff = Number(c.difference ?? 0)
                 return (
-                  <tr key={c.id} className="border-t border-gray-100">
+                  <tr key={c.id} onClick={() => handleView(c.id)} title="Ver el detalle del corte"
+                    className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50">
                     <td className="px-4 py-3 text-gray-900">{c.userName}</td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(c.openedAt)}</td>
                     <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{c.status === 'OPEN' ? <span className="text-green-700 font-medium">Abierto</span> : formatDate(c.closedAt)}</td>
@@ -154,7 +155,7 @@ export default function ReceptionCashCut() {
                     <td className={`px-4 py-3 text-right font-medium ${c.status === 'OPEN' ? 'text-gray-300' : diff === 0 ? 'text-green-700' : diff < 0 ? 'text-red-600' : 'text-amber-600'}`}>
                       {c.status === 'OPEN' ? '—' : diff === 0 ? 'Cuadra' : `${diff < 0 ? '-' : '+'}${formatMoney(Math.abs(diff))}`}
                     </td>
-                    <td className="px-4 py-3 text-right"><button className="text-primary-700 hover:underline" onClick={() => handleView(c.id)}>Ver</button></td>
+                    <td className="px-4 py-3 text-right text-slate-300">›</td>
                   </tr>
                 )
               })}

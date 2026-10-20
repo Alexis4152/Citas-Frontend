@@ -4,12 +4,12 @@
 
 const DEFAULT_BRAND_COLOR = '#155dea'
 
-const RAMP_KEYS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900]
+const RAMP_KEYS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
 
 // Cuánto se aleja cada tono de la lightness del color base (que se usa como el 600, el
 // tono "principal" — botones, links, nav activo). Positivo = más claro, negativo = más oscuro.
 const LIGHTNESS_OFFSET = {
-  50: 45, 100: 38, 200: 28, 300: 18, 400: 9, 500: 4, 600: 0, 700: -10, 800: -18, 900: -26,
+  50: 45, 100: 38, 200: 28, 300: 18, 400: 9, 500: 4, 600: 0, 700: -10, 800: -18, 900: -26, 950: -34,
 }
 
 function hexToHsl(hex) {
@@ -61,7 +61,7 @@ function hexToRgbTriplet(hex) {
   return `${r} ${g} ${b}`
 }
 
-/** Genera una rampa de 10 tonos (50-900) a partir de un solo color base. El tono 600
+/** Genera una rampa de 11 tonos (50-950) a partir de un solo color base. El tono 600
  * corresponde exactamente al color base. */
 export function generateRamp(baseHex) {
   const { h, s, l } = hexToHsl(baseHex)

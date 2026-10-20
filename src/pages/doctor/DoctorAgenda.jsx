@@ -1,3 +1,4 @@
+import PendingArrivalAlert from '../../components/PendingArrivalAlert'
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
@@ -321,13 +322,15 @@ export default function DoctorAgenda() {
       <LoadingOverlay show={busyAction === 'complete'} message="Guardando..." />
       <LoadingOverlay show={busyAction === 'no-show'} message="Guardando..." />
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Mi agenda</h1>
+        <h1 className="page-title">Mi agenda</h1>
         <div className="flex items-center gap-2 text-sm">
           <button className="btn-secondary py-1 px-3" onClick={() => setWeekStart(addDays(weekStart, -7))}>‹ Semana anterior</button>
           <span className="text-gray-600 capitalize">{formatDateOnly(weekStart)} – {formatDateOnly(weekEnd)}</span>
           <button className="btn-secondary py-1 px-3" onClick={() => setWeekStart(addDays(weekStart, 7))}>Semana siguiente ›</button>
         </div>
       </div>
+
+      <PendingArrivalAlert />
 
       <div className="card p-6">
         <AvailabilityCalendar days={days} mode="agenda" loading={loading} onSlotClick={handleSlotClick} />

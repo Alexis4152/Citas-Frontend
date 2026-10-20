@@ -5,6 +5,7 @@ export const getSpecialties = () => api.get('/public/specialties')
 export const getBranches = () => api.get('/public/branches')
 export const searchDoctors = (params) => api.get('/public/doctors', { params })
 export const getDoctorDetail = (id) => api.get(`/public/doctors/${id}`)
-export const getDoctorAvailability = (id, date, days = 7) =>
-  api.get(`/public/doctors/${id}/availability`, { params: { date, days } })
+// holder: pestaña que consulta (ver api/slotHolds.js): sus propios apartados se ven como suyos.
+export const getDoctorAvailability = (id, date, days = 7, holder) =>
+  api.get(`/public/doctors/${id}/availability`, { params: { date, days, holder: holder || undefined } })
 export const getAppointmentHospital = (token) => api.get(`/public/appointment-hospital/${token}`)

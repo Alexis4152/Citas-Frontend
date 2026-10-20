@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
+import { Building2, ChevronRight, MapPin, Plus, Search } from 'lucide-react'
 import { adminListBranches, adminCreateBranch, adminUpdateBranch, adminDeactivateBranch } from '../../api/adminBranches'
 import { useNotify } from '../../context/NotifyContext'
 import Modal from '../../components/Modal'
 import AdminPagination from '../../components/AdminPagination'
 import useDebouncedValue from '../../hooks/useDebouncedValue'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../../utils/phone'
+import { Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui'
 
-const EMPTY = { name: '', address: '', city: '', phone: '', openTime: '08:00', closeTime: '18:00' }
+const EMPTY = { name: '', address: '', neighborhood: '', city: '', state: '', postalCode: '', phone: '', openTime: '08:00', closeTime: '18:00' }
+
+const fullAddress = (b) => [b.address, b.neighborhood, [b.postalCode && `CP ${b.postalCode}`, b.city].filter(Boolean).join(' '), b.state]
+  .filter(Boolean).join(', ')
 
 export default function AdminBranches() {
   const { notify, confirmDialog } = useNotify()
@@ -17,10 +22,10 @@ export default function AdminBranches() {
   const [result, setResult] = useState({ content: [], page: 0, totalPages: 0, totalElements: 0 })
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(EMPTY)
-  const [editingId, setEditingId] = useState(null)
+  const [editing, setEditing] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [deactivatingId, setDeactivatingId] = useState(null)
+  const [deactivating, setDeactivating] = useState(false)
 
   function load() {
     setLoading(true)
@@ -33,25 +38,21 @@ export default function AdminBranches() {
   useEffect(() => { load() }, [page, size, debouncedQuery])
   useEffect(() => { setPage(0) }, [debouncedQuery])
 
-  function handleClearSearch() {
-    setQuery('')
-    setPage(0)
-  }
-
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
   }
 
   function openCreate() {
-    setEditingId(null)
+    setEditing(null)
     setForm(EMPTY)
     setModalOpen(true)
   }
 
   function openEdit(b) {
-    setEditingId(b.id)
+    setEditing(b)
     setForm({
-      name: b.name, address: b.address || '', city: b.city || '', phone: b.phone || '',
+      name: b.name, address: b.address || '', neighborhood: b.neighborhood || '', city: b.city || '', state: b.state || '',
+      postalCode: b.postalCode || '', phone: b.phone || '',
       openTime: (b.openTime || '08:00:00').slice(0, 5), closeTime: (b.closeTime || '18:00:00').slice(0, 5),
     })
     setModalOpen(true)
@@ -63,10 +64,14 @@ export default function AdminBranches() {
       notify('El teléfono debe tener exactamente 10 dígitos', 'error')
       return
     }
+    if (form.postalCode && form.postalCode.length !== 5) {
+      notify('El código postal debe tener 5 dígitos', 'error')
+      return
+    }
     setSaving(true)
     try {
-      if (editingId) {
-        await adminUpdateBranch(editingId, form)
+      if (editing) {
+        await adminUpdateBranch(editing.id, form)
         notify('Sede actualizada', 'success')
       } else {
         await adminCreateBranch(form)
@@ -81,114 +86,56 @@ export default function AdminBranches() {
     }
   }
 
-  async function handleDeactivate(id, name) {
-    const ok = await confirmDialog(`¿Desactivar "${name}"?`, { confirmText: 'Desactivar' })
+  async function handleDeactivate() {
+    const ok = await confirmDialog(`¿Desactivar "${editing.name}"? Ya no se podrán agendar citas en esta sede.`, { confirmText: 'Desactivar' })
     if (!ok) return
-    setDeactivatingId(id)
+    setDeactivating(true)
     try {
-      await adminDeactivateBranch(id)
+      await adminDeactivateBranch(editing.id)
       notify('Sede desactivada', 'success')
+      setModalOpen(false)
       load()
     } catch (err) {
       notify(err.response?.data?.message || 'No se pudo desactivar', 'error')
     } finally {
-      setDeactivatingId(null)
+      setDeactivating(false)
     }
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Sedes</h1>
-        <button className="btn-primary text-sm" onClick={openCreate}>+ Agregar sede</button>
-      </div>
+      <PageHeader icon={Building2} eyebrow="Catálogo" title="Sedes" description="Dónde atiende el hospital. Toca una sede para ver o editar sus datos."
+        actions={<button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> Agregar sede</button>} />
 
-      <div className="card p-4 mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[220px]">
-          <label className="text-xs font-medium text-gray-600 block mb-1">Nombre o ciudad</label>
-          <input className="input" placeholder="Buscar..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      <div className="card mb-4 p-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input className="input pl-10" placeholder="Buscar por nombre o ciudad" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        {query && (
-          <button type="button" className="btn-secondary text-sm" onClick={handleClearSearch}>
-            Limpiar
-          </button>
-        )}
       </div>
 
-      <div className="card p-0 overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : result.content.length === 0 ? (
+          <EmptyState icon={Building2} title="Sin sedes" description="Agrega la primera sede del hospital." />
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Nombre</th>
-                    <th className="px-4 py-3 font-medium">Ciudad</th>
-                    <th className="px-4 py-3 font-medium">Horario</th>
-                    <th className="px-4 py-3 font-medium">Estado</th>
-                    <th className="px-4 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.content.map((b) => (
-                    <tr key={b.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3 font-medium text-gray-900">{b.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{b.city}</td>
-                      <td className="px-4 py-3 text-gray-600">{b.openTime?.slice(0, 5)} – {b.closeTime?.slice(0, 5)}</td>
-                      <td className="px-4 py-3">
-                        <span className={b.isActive ? 'text-green-600' : 'text-gray-400'}>{b.isActive ? 'Activa' : 'Inactiva'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => openEdit(b)} className="text-primary-700 hover:underline mr-3">Editar</button>
-                        {b.isActive && (
-                          <button
-                            onClick={() => handleDeactivate(b.id, b.name)}
-                            disabled={deactivatingId === b.id}
-                            className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                          >
-                            {deactivatingId === b.id ? 'Desactivando...' : 'Desactivar'}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {result.content.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin sedes</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-gray-100">
-              {result.content.map((b) => (
-                <div key={b.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-gray-900">{b.name}</p>
-                    <span className={`text-xs ${b.isActive ? 'text-green-600' : 'text-gray-400'}`}>{b.isActive ? 'Activa' : 'Inactiva'}</span>
+          <ul className="divide-y divide-slate-100">
+            {result.content.map((b) => (
+              <li key={b.id}>
+                <button onClick={() => openEdit(b)} className="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-slate-50">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-600"><MapPin className="h-[18px] w-[18px]" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">{b.name}</p>
+                    <p className="truncate text-xs text-slate-500">{fullAddress(b) || 'Sin dirección'}</p>
                   </div>
-                  <p className="text-sm text-gray-600 mt-0.5">{b.city}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{b.openTime?.slice(0, 5)} – {b.closeTime?.slice(0, 5)}</p>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <button onClick={() => openEdit(b)} className="text-primary-700 hover:underline">Editar</button>
-                    {b.isActive && (
-                      <button
-                        onClick={() => handleDeactivate(b.id, b.name)}
-                        disabled={deactivatingId === b.id}
-                        className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                      >
-                        {deactivatingId === b.id ? 'Desactivando...' : 'Desactivar'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {result.content.length === 0 && (
-                <p className="px-4 py-8 text-center text-gray-400 text-sm">Sin sedes</p>
-              )}
-            </div>
-          </>
+                  <span className="hidden text-sm tabular-nums text-slate-500 sm:block">{b.openTime?.slice(0, 5)} – {b.closeTime?.slice(0, 5)}</span>
+                  <Badge tone={b.isActive ? 'green' : 'slate'} dot>{b.isActive ? 'Activa' : 'Inactiva'}</Badge>
+                  <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         <AdminPagination
           page={result.page} size={size} totalPages={result.totalPages} totalElements={result.totalElements}
@@ -198,19 +145,27 @@ export default function AdminBranches() {
       </div>
 
       {modalOpen && (
-        <Modal title={editingId ? 'Editar sede' : 'Nueva sede'} onClose={() => setModalOpen(false)}>
+        <Modal title={editing ? editing.name : 'Nueva sede'} onClose={() => setModalOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Nombre"><input required className="input" value={form.name} onChange={(e) => update('name', e.target.value)} /></Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Nombre"><input required maxLength={150} className="input" value={form.name} onChange={(e) => update('name', e.target.value)} /></Field>
               <Field label="Teléfono"><input className="input" {...PHONE_INPUT_PROPS} value={form.phone} onChange={(e) => update('phone', onlyDigits(e.target.value))} /></Field>
-              <Field label="Dirección" className="sm:col-span-2"><input className="input" value={form.address} onChange={(e) => update('address', e.target.value)} /></Field>
-              <Field label="Ciudad"><input className="input" value={form.city} onChange={(e) => update('city', e.target.value)} /></Field>
+              <Field label="Calle y número" className="sm:col-span-2"><input maxLength={255} className="input" placeholder="Av. Insurgentes Sur 1234, piso 3" value={form.address} onChange={(e) => update('address', e.target.value)} /></Field>
+              <Field label="Colonia"><input maxLength={120} className="input" value={form.neighborhood} onChange={(e) => update('neighborhood', e.target.value)} /></Field>
+              <Field label="Código postal"><input className="input" inputMode="numeric" maxLength={5} placeholder="06700" value={form.postalCode} onChange={(e) => update('postalCode', onlyDigits(e.target.value).slice(0, 5))} /></Field>
+              <Field label="Ciudad o municipio"><input maxLength={100} className="input" value={form.city} onChange={(e) => update('city', e.target.value)} /></Field>
+              <Field label="Estado"><input maxLength={100} className="input" value={form.state} onChange={(e) => update('state', e.target.value)} /></Field>
               <Field label="Hora apertura"><input type="time" className="input" value={form.openTime} onChange={(e) => update('openTime', e.target.value)} /></Field>
               <Field label="Hora cierre"><input type="time" className="input" value={form.closeTime} onChange={(e) => update('closeTime', e.target.value)} /></Field>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+              {editing?.isActive && (
+                <button type="button" className="btn-danger-ghost mr-auto" disabled={deactivating} onClick={handleDeactivate}>
+                  {deactivating ? 'Desactivando...' : 'Desactivar sede'}
+                </button>
+              )}
               <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
-              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : editingId ? 'Actualizar sede' : 'Crear sede'}</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : editing ? 'Guardar cambios' : 'Crear sede'}</button>
             </div>
           </form>
         </Modal>
@@ -222,7 +177,7 @@ export default function AdminBranches() {
 function Field({ label, children, className = '' }) {
   return (
     <label className={`block text-sm ${className}`}>
-      <span className="block text-gray-700 mb-1 font-medium">{label}</span>
+      <span className="mb-1 block font-medium text-slate-700">{label}</span>
       {children}
     </label>
   )

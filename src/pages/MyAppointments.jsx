@@ -7,7 +7,9 @@ import { useNotify } from '../context/NotifyContext'
 import { downloadBlob } from '../utils/media'
 import { formatDateOnly, formatTimeOnly } from '../utils/format'
 import LoadingOverlay from '../components/LoadingOverlay'
-import StatusBadge, { PaymentBadge } from '../components/StatusBadge'
+import { AppointmentBadges } from '../components/StatusBadge'
+import AppointmentDetailCard from '../components/AppointmentDetailCard'
+import { ChevronRight } from 'lucide-react'
 import RefundNotice from '../components/RefundNotice'
 import { formatMoney, hasPrice } from '../utils/money'
 import AdminPagination from '../components/AdminPagination'
@@ -57,6 +59,8 @@ export default function MyAppointments() {
   // Cita pagada por anticipado que se está por cancelar: se avisa la política de reembolso antes.
   const [cancelPaid, setCancelPaid] = useState(null)
   const [savingReschedule, setSavingReschedule] = useState(false)
+  // Cita abierta en el panel de detalle (ahí están Comprobante, Reprogramar y Cancelar).
+  const [selected, setSelected] = useState(null)
 
   function loadUpcoming() {
     setLoadingUpcoming(true)
@@ -195,7 +199,7 @@ export default function MyAppointments() {
     <div className="container-app py-8 sm:py-10">
       <LoadingOverlay show={!!busyKey && busyKey.startsWith('cancel-')} message="Cancelando tu cita..." />
       <LoadingOverlay show={!!busyKey && busyKey.startsWith('download-')} message="Generando comprobante..." />
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Mis citas</h1>
+      <h1 className="page-title mb-6">Mis citas</h1>
 
       {ownPatient && (
         <div className="card p-4 mb-6 flex items-start justify-between gap-3 flex-wrap">
@@ -218,12 +222,7 @@ export default function MyAppointments() {
           ) : (
             <div className="space-y-3">
               {upcoming.map((a) => (
-                <AppointmentCard
-                  key={a.id} a={a} onCancel={() => handleCancel(a.id)} onDownload={() => handleDownloadReceipt(a.id)}
-                  onReschedule={() => setRescheduling(a)}
-                  highlighted={String(a.id) === String(highlightAppointmentId)}
-                  cancelling={busyKey === `cancel-${a.id}`} downloading={busyKey === `download-${a.id}`}
-                />
+                <AppointmentCard key={a.id} a={a} onOpen={() => setSelected(a)} highlighted={String(a.id) === String(highlightAppointmentId)} />
               ))}
             </div>
           )}
@@ -267,13 +266,7 @@ export default function MyAppointments() {
           ) : (
             <div className="space-y-3">
               {result.content.map((a) => (
-                <AppointmentCard
-                  key={a.id} a={a} onDownload={() => handleDownloadReceipt(a.id)}
-                  onCancel={a.status === 'SCHEDULED' ? () => handleCancel(a.id) : undefined}
-                  onReschedule={a.status === 'SCHEDULED' ? () => setRescheduling(a) : undefined}
-                  highlighted={String(a.id) === String(highlightAppointmentId)}
-                  cancelling={busyKey === `cancel-${a.id}`} downloading={busyKey === `download-${a.id}`}
-                />
+                <AppointmentCard key={a.id} a={a} onOpen={() => setSelected(a)} highlighted={String(a.id) === String(highlightAppointmentId)} />
               ))}
             </div>
           )}
@@ -287,6 +280,14 @@ export default function MyAppointments() {
           </div>
         </section>
       </div>
+
+      {selected && (
+        <AppointmentDetailCard appointment={selected} onClose={() => setSelected(null)}
+          busyAction={busyKey === `download-${selected.id}` ? 'download' : busyKey === `cancel-${selected.id}` ? 'cancel' : null}
+          onDownload={() => handleDownloadReceipt(selected.id)}
+          onReschedule={() => { setRescheduling(selected); setSelected(null) }}
+          onCancel={() => { const id = selected.id; setSelected(null); handleCancel(id) }} />
+      )}
 
       {cancelPaid && (
         <Modal title="Cancelar cita pagada" onClose={() => setCancelPaid(null)} maxWidth="max-w-md">
@@ -328,41 +329,25 @@ export default function MyAppointments() {
   )
 }
 
-function AppointmentCard({ a, onCancel, onReschedule, onDownload, highlighted, cancelling, downloading }) {
+function AppointmentCard({ a, onOpen, highlighted }) {
   return (
-    <div
+    <button
       id={`appointment-card-${a.id}`}
-      className={`card p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${
+      onClick={onOpen}
+      className={`card card-hover group flex w-full flex-col gap-3 p-4 text-left sm:flex-row sm:items-center ${
         highlighted ? 'ring-2 ring-primary-300 bg-primary-50/40' : ''
       }`}
     >
-      <div>
-        <p className="font-medium text-gray-900">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName} — {a.doctor?.specialty?.name}</p>
-        <p className="text-sm text-gray-500 capitalize">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)} · {a.branch?.name}</p>
-        {a.reasonForVisit && <p className="text-xs text-gray-400 mt-1">{a.reasonForVisit}</p>}
-        {hasPrice(a.price) && (
-          <p className="text-xs text-gray-500 mt-1">
-            Consulta: <span className="font-medium text-gray-700">{formatMoney(a.price)}</span>
-            <PaymentBadge appointment={a} />
-          </p>
-        )}
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-slate-900">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName} — {a.doctor?.specialty?.name}</p>
+        <p className="text-sm capitalize text-slate-500">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)} · {a.branch?.name}</p>
+        {a.reasonForVisit && <p className="mt-1 truncate text-xs text-slate-400">{a.reasonForVisit}</p>}
+        {hasPrice(a.price) && <p className="mt-1 text-xs text-slate-500">Consulta: <span className="font-medium text-slate-700">{formatMoney(a.price)}</span></p>}
       </div>
-      <div className="flex items-center gap-3">
-        <StatusBadge status={a.status} />
-        {onDownload && (
-          <button onClick={onDownload} disabled={downloading} className="text-primary-700 text-sm hover:underline disabled:opacity-50 disabled:no-underline">
-            {downloading ? 'Descargando...' : 'Comprobante'}
-          </button>
-        )}
-        {onReschedule && (
-          <button onClick={onReschedule} className="text-primary-700 text-sm hover:underline">Reprogramar</button>
-        )}
-        {onCancel && (
-          <button onClick={onCancel} disabled={cancelling} className="text-red-600 text-sm hover:underline disabled:opacity-50 disabled:no-underline">
-            {cancelling ? 'Cancelando...' : 'Cancelar'}
-          </button>
-        )}
+      <div className="flex items-center gap-2">
+        <AppointmentBadges appointment={a} showOverdue={false} />
+        <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />
       </div>
-    </div>
+    </button>
   )
 }

@@ -5,6 +5,8 @@ import {
 import { useNotify } from '../../context/NotifyContext'
 import { formatTimeOnly } from '../../utils/format'
 import Modal from '../../components/Modal'
+import { CalendarClock, ChevronRight, Plus } from 'lucide-react'
+import { Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui'
 
 const DAYS = [
   { value: 'MONDAY', label: 'Lunes' },
@@ -102,6 +104,7 @@ export default function DoctorSchedule() {
     try {
       await deleteOwnSchedule(id)
       notify('Horario eliminado', 'success')
+      setModalOpen(false)
       load()
     } catch (err) {
       notify(err.response?.data?.message || 'No se pudo eliminar', 'error')
@@ -112,75 +115,30 @@ export default function DoctorSchedule() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Mi horario semanal</h1>
-        <button className="btn-primary text-sm" onClick={openCreate}>+ Agregar horario</button>
-      </div>
+      <PageHeader icon={CalendarClock} eyebrow="Agenda" title="Mi horario semanal" description="Toca un horario para cambiarlo o eliminarlo."
+        actions={<button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> Agregar horario</button>} />
 
-      <div className="card p-0 overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : schedules.length === 0 ? (
+          <EmptyState icon={CalendarClock} title="Sin horarios configurados" description="Agrega los días y horas en que atiendes." />
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Día</th>
-                    <th className="px-4 py-3 font-medium">Sede</th>
-                    <th className="px-4 py-3 font-medium">Horario</th>
-                    <th className="px-4 py-3 font-medium">Min./cita</th>
-                    <th className="px-4 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedules.map((s) => (
-                    <tr key={s.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3">{DAYS.find((d) => d.value === s.dayOfWeek)?.label || s.dayOfWeek}</td>
-                      <td className="px-4 py-3">{s.branchName}</td>
-                      <td className="px-4 py-3">{formatTimeOnly(s.startTime)} – {formatTimeOnly(s.endTime)}</td>
-                      <td className="px-4 py-3">{s.slotMinutes ?? '—'}</td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => openEdit(s)} disabled={deletingId === s.id} className="text-primary-700 hover:underline mr-3 disabled:opacity-50">Editar</button>
-                        <button
-                          onClick={() => handleDelete(s.id)}
-                          disabled={deletingId === s.id}
-                          className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                        >
-                          {deletingId === s.id ? 'Eliminando...' : 'Eliminar'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {schedules.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin horarios configurados</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-gray-100">
-              {schedules.map((s) => (
-                <div key={s.id} className="px-4 py-3">
-                  <p className="font-medium text-gray-900">{DAYS.find((d) => d.value === s.dayOfWeek)?.label || s.dayOfWeek} — {s.branchName}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">{formatTimeOnly(s.startTime)} – {formatTimeOnly(s.endTime)} · {s.slotMinutes ?? '—'} min/cita</p>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <button onClick={() => openEdit(s)} disabled={deletingId === s.id} className="text-primary-700 hover:underline disabled:opacity-50">Editar</button>
-                    <button
-                      onClick={() => handleDelete(s.id)}
-                      disabled={deletingId === s.id}
-                      className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                    >
-                      {deletingId === s.id ? 'Eliminando...' : 'Eliminar'}
-                    </button>
+          <ul className="divide-y divide-slate-100">
+            {schedules.map((s) => (
+              <li key={s.id}>
+                <button onClick={() => openEdit(s)} className="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-slate-50">
+                  <span className="w-24 shrink-0 font-medium text-slate-900">{DAYS.find((d) => d.value === s.dayOfWeek)?.label || s.dayOfWeek}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm tabular-nums text-slate-800">{formatTimeOnly(s.startTime)} – {formatTimeOnly(s.endTime)}</p>
+                    <p className="truncate text-xs text-slate-500">{s.branchName}</p>
                   </div>
-                </div>
-              ))}
-              {schedules.length === 0 && (
-                <p className="px-4 py-8 text-center text-gray-400 text-sm">Sin horarios configurados</p>
-              )}
-            </div>
-          </>
+                  <Badge>{s.slotMinutes ? `${s.slotMinutes} min/cita` : 'Duración predeterminada'}</Badge>
+                  <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
@@ -210,7 +168,12 @@ export default function DoctorSchedule() {
                 <input type="number" min="5" max="240" step="5" className="input" placeholder="Predeterminado" value={form.slotMinutes} onChange={(e) => update('slotMinutes', e.target.value)} />
               </Field>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+              {editingId && (
+                <button type="button" className="btn-danger-ghost mr-auto" disabled={deletingId === editingId} onClick={() => handleDelete(editingId)}>
+                  {deletingId === editingId ? 'Eliminando...' : 'Eliminar horario'}
+                </button>
+              )}
               <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
               <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : editingId ? 'Actualizar horario' : 'Crear horario'}</button>
             </div>

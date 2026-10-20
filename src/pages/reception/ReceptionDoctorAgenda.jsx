@@ -228,7 +228,7 @@ export default function ReceptionDoctorAgenda() {
       )}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Agenda doctores</h1>
+        <h1 className="page-title">Agenda doctores</h1>
         <p className="text-sm text-gray-500 mt-1">
           {allowedSpecialtyIds
             ? `Consulta la agenda semanal de doctores de: ${user.specialties.map((s) => s.name).join(', ')}.`

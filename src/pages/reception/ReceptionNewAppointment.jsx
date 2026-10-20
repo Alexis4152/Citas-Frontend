@@ -205,7 +205,7 @@ export default function ReceptionNewAppointment() {
       <LoadingOverlay show={creatingPatient} message="Creando paciente..." />
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Nueva cita telefónica</h1>
+        <h1 className="page-title">Nueva cita telefónica</h1>
         <p className="text-sm text-gray-500 mt-1">Registra una cita agendada por teléfono a nombre del paciente.</p>
       </div>
 

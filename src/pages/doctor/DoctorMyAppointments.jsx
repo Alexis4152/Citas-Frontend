@@ -4,14 +4,18 @@ import {
   rescheduleOwnAppointment, markAppointmentCompleted, markAppointmentNoShow, markAppointmentArrived,
 } from '../../api/doctorPortal'
 import { useNotify } from '../../context/NotifyContext'
+import { useAuth } from '../../context/AuthContext'
 import { downloadBlob } from '../../utils/media'
 import {
-  formatDateOnly, formatTimeOnly, canMarkAppointmentCompleted, canMarkAppointmentNoShow, canRegisterArrival,
+  formatDateOnly, formatTimeOnly,
 } from '../../utils/format'
 import AdminPagination from '../../components/AdminPagination'
 import LoadingOverlay from '../../components/LoadingOverlay'
-import StatusBadge, { STATUS_LABELS, AppointmentFlags, PaymentBadge } from '../../components/StatusBadge'
+import { STATUS_LABELS, AppointmentBadges } from '../../components/StatusBadge'
 import Modal from '../../components/Modal'
+import AppointmentDetailCard from '../../components/AppointmentDetailCard'
+import { ChevronRight } from 'lucide-react'
+import { useNavigate } from '../../router'
 import usePolling from '../../hooks/usePolling'
 import usePersistedState from '../../hooks/usePersistedState'
 import useDebouncedValue from '../../hooks/useDebouncedValue'
@@ -37,6 +41,15 @@ export default function DoctorMyAppointments() {
   // Evita doble clic en Cancelar/Liberar/Comprobante de una fila mientras la petición está en curso.
   const [busyKey, setBusyKey] = useState(null)
   const [rescheduling, setRescheduling] = useState(null)
+  // Registro abierto en el panel de detalle (clic en la fila).
+  const [selected, setSelected] = useState(null)
+  const navigate = useNavigate()
+  const { can } = useAuth()
+  const fromDrawer = (fn) => async () => {
+    const target = selected
+    setSelected(null)
+    await fn(target)
+  }
 
   function load() {
     setLoading(true)
@@ -166,7 +179,7 @@ export default function DoctorMyAppointments() {
       <LoadingOverlay show={!!busyKey && busyKey.startsWith('cancel-')} message="Cancelando la cita..." />
       <LoadingOverlay show={!!busyKey && busyKey.startsWith('release-')} message="Liberando el espacio..." />
       <LoadingOverlay show={!!busyKey && busyKey.startsWith('download-')} message="Generando comprobante..." />
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Mis citas</h1>
+      <h1 className="page-title mb-6">Mis citas</h1>
 
       <div className="card p-4 mb-4 flex flex-wrap items-end gap-3">
         {branches.length > 1 && (
@@ -208,67 +221,6 @@ export default function DoctorMyAppointments() {
         ) : (
           <>
             {(() => {
-              const renderActions = (a) => (
-                <>
-                  <button
-                    onClick={() => handleDownloadReceipt(a.id)}
-                    disabled={busyKey === `download-${a.id}`}
-                    className="text-primary-700 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-                  >
-                    {busyKey === `download-${a.id}` ? 'Descargando...' : 'Comprobante'}
-                  </button>
-                  {a.status === 'SCHEDULED' && (
-                    <>
-                      <button onClick={() => setRescheduling(a)} className="text-primary-700 hover:underline mr-3">
-                        Reprogramar
-                      </button>
-                      <button
-                        onClick={() => handleCancel(a.id)}
-                        disabled={busyKey === `cancel-${a.id}`}
-                        className="text-red-600 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-                      >
-                        {busyKey === `cancel-${a.id}` ? 'Cancelando...' : 'Cancelar'}
-                      </button>
-                    </>
-                  )}
-                  {a.status === 'CANCELLED' && a.canRelease && (
-                    <button
-                      onClick={() => handleRelease(a.id)}
-                      disabled={busyKey === `release-${a.id}`}
-                      className="text-primary-700 hover:underline disabled:opacity-50 disabled:no-underline"
-                    >
-                      {busyKey === `release-${a.id}` ? 'Liberando...' : 'Liberar horario'}
-                    </button>
-                  )}
-                  {canRegisterArrival(a) && (
-                    <button
-                      onClick={() => handleArrived(a.id)}
-                      disabled={busyKey === `arrived-${a.id}`}
-                      className="text-emerald-700 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-                    >
-                      {busyKey === `arrived-${a.id}` ? 'Guardando...' : 'Llegó'}
-                    </button>
-                  )}
-                  {canMarkAppointmentCompleted(a) && (
-                    <button
-                      onClick={() => handleMarkCompleted(a.id)}
-                      disabled={busyKey === `complete-${a.id}`}
-                      className="text-green-700 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-                    >
-                      {busyKey === `complete-${a.id}` ? 'Guardando...' : a.status === 'NO_SHOW' ? 'Corregir a atendida' : 'Marcar atendida'}
-                    </button>
-                  )}
-                  {canMarkAppointmentNoShow(a) && (
-                    <button
-                      onClick={() => handleMarkNoShow(a.id)}
-                      disabled={busyKey === `no-show-${a.id}`}
-                      className="text-gray-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                    >
-                      {busyKey === `no-show-${a.id}` ? 'Guardando...' : 'No asistió'}
-                    </button>
-                  )}
-                </>
-              )
               return (
                 <>
                   <div className="hidden md:block overflow-x-auto">
@@ -284,15 +236,15 @@ export default function DoctorMyAppointments() {
                       </thead>
                       <tbody>
                         {result.content.map((a) => (
-                          <tr key={a.id} className="border-t border-gray-100">
+                          <tr key={a.id} onClick={() => setSelected(a)} className="group cursor-pointer border-t border-gray-100 transition hover:bg-slate-50">
                             <td className="px-4 py-3">
                               <p className="font-medium text-gray-900">{a.patient?.firstName} {a.patient?.lastName}</p>
                               <p className="text-xs text-gray-500">{a.patient?.phone}</p>
                             </td>
                             <td className="px-4 py-3 text-gray-600 capitalize">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)}</td>
                             <td className="px-4 py-3 text-gray-600">{a.branch?.name}</td>
-                            <td className="px-4 py-3"><StatusBadge status={a.status} /><AppointmentFlags appointment={a} /><PaymentBadge appointment={a} /></td>
-                            <td className="px-4 py-3 text-right whitespace-nowrap">{renderActions(a)}</td>
+                            <td className="px-4 py-3"><AppointmentBadges appointment={a} /></td>
+                            <td className="w-8 px-4 py-3"><ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-primary-600" /></td>
                           </tr>
                         ))}
                         {result.content.length === 0 && (
@@ -304,16 +256,16 @@ export default function DoctorMyAppointments() {
 
                   <div className="md:hidden divide-y divide-gray-100">
                     {result.content.map((a) => (
-                      <div key={a.id} className="px-4 py-3">
+                      <div key={a.id} onClick={() => setSelected(a)} className="cursor-pointer px-4 py-3 active:bg-slate-50">
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <p className="font-medium text-gray-900">{a.patient?.firstName} {a.patient?.lastName}</p>
                             <p className="text-xs text-gray-500">{a.patient?.phone}</p>
                           </div>
-                          <StatusBadge status={a.status} /><AppointmentFlags appointment={a} /><PaymentBadge appointment={a} />
+                          <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
                         </div>
+                        <div className="mt-1.5"><AppointmentBadges appointment={a} /></div>
                         <p className="text-sm text-gray-500 capitalize mt-1">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)} · {a.branch?.name}</p>
-                        <div className="flex flex-wrap items-center gap-x-1 mt-2 text-sm">{renderActions(a)}</div>
                       </div>
                     ))}
                     {result.content.length === 0 && (
@@ -331,6 +283,21 @@ export default function DoctorMyAppointments() {
           onPageChange={setPage} onSizeChange={(s) => { setSize(s); setPage(0) }}
         />
       </div>
+
+      <AppointmentDetailCard
+        appointment={selected}
+        showDoctor={false}
+        onClose={() => setSelected(null)}
+        busyAction={busyKey ? busyKey.split('-')[0] : null}
+        onDownload={() => handleDownloadReceipt(selected.id)}
+        onReschedule={can('APPOINTMENTS_RESCHEDULE') ? () => { setRescheduling(selected); setSelected(null) } : undefined}
+        onCancel={can('APPOINTMENTS_CANCEL') ? fromDrawer((a) => handleCancel(a.id)) : undefined}
+        onRelease={can('APPOINTMENTS_RELEASE') ? fromDrawer((a) => handleRelease(a.id)) : undefined}
+        onMarkArrived={can('APPOINTMENTS_STATUS') ? fromDrawer((a) => handleArrived(a.id)) : undefined}
+        onMarkCompleted={can('APPOINTMENTS_STATUS') ? fromDrawer((a) => handleMarkCompleted(a.id)) : undefined}
+        onMarkNoShow={can('APPOINTMENTS_STATUS') ? fromDrawer((a) => handleMarkNoShow(a.id)) : undefined}
+        onViewPatient={selected?.patient?.id && can('PATIENTS_MODULE') ? () => navigate(`/doctor/pacientes/${selected.patient.id}`) : undefined}
+      />
 
       {rescheduling && (
         <RescheduleModal

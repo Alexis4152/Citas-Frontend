@@ -46,7 +46,7 @@ export default function AdminEmailConfig() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Configuración de correo</h1>
+      <h1 className="page-title mb-6">Configuración de correo</h1>
 
       {loading ? (
         <p className="text-gray-500">Cargando...</p>

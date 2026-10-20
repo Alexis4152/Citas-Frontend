@@ -13,6 +13,9 @@ import MedicalInfoFields, { EMPTY_MEDICAL_INFO, toMedicalInfoPayload } from '../
 import useDebouncedValue from '../../hooks/useDebouncedValue'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../../utils/phone'
 import { staffBasePath } from '../../utils/staffPath'
+import PatientProfileFields, { EMPTY_PROFILE, profileProblem, toProfilePayload } from '../../components/PatientProfileFields'
+import { Avatar, Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui'
+import { ChevronRight, Download, Plus, Upload, Users } from 'lucide-react'
 
 const EMPTY_PATIENT = { firstName: '', lastName: '', phone: '', email: '', createAccount: false }
 
@@ -21,7 +24,8 @@ export default function ReceptionPatients() {
   // Misma pantalla para recepción, doctor y admin: los enlaces se quedan dentro del panel actual.
   const basePath = staffBasePath(useLocation().pathname)
   const { notify } = useNotify()
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  const canOpen = can('PATIENTS_MODULE')
   const isDoctorPanel = user?.role === 'DOCTOR'
   // null = recepcionista general (o admin), sin restricción -- mismo criterio que Citas.
   const allowedSpecialtyIds = user?.specialties?.length ? new Set(user.specialties.map((s) => s.id)) : null
@@ -43,6 +47,7 @@ export default function ReceptionPatients() {
   const [modalOpen, setModalOpen] = useState(false)
   const [newPatient, setNewPatient] = useState(EMPTY_PATIENT)
   const [newPatientMedicalInfo, setNewPatientMedicalInfo] = useState(EMPTY_MEDICAL_INFO)
+  const [newPatientProfile, setNewPatientProfile] = useState(EMPTY_PROFILE)
   const [savingPatient, setSavingPatient] = useState(false)
   const [createdInfo, setCreatedInfo] = useState(null)
 
@@ -119,6 +124,7 @@ export default function ReceptionPatients() {
   function openCreatePatient() {
     setNewPatient(EMPTY_PATIENT)
     setNewPatientMedicalInfo(EMPTY_MEDICAL_INFO)
+    setNewPatientProfile(EMPTY_PROFILE)
     setModalOpen(true)
   }
 
@@ -132,9 +138,14 @@ export default function ReceptionPatients() {
       notify('Se requiere un correo para crear la cuenta de acceso', 'error')
       return
     }
+    const problem = profileProblem(newPatientProfile)
+    if (problem) {
+      notify(problem, 'error')
+      return
+    }
     setSavingPatient(true)
     try {
-      const res = await createPatient({ ...newPatient, medicalInfo: toMedicalInfoPayload(newPatientMedicalInfo) })
+      const res = await createPatient({ ...newPatient, ...toProfilePayload(newPatientProfile), medicalInfo: toMedicalInfoPayload(newPatientMedicalInfo) })
       setModalOpen(false)
       notify('Paciente creado correctamente', 'success')
       if (res.data.data.temporaryPassword) {
@@ -173,29 +184,26 @@ export default function ReceptionPatients() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Pacientes</h1>
-        <div className="flex flex-wrap gap-2 text-sm">
-          <button className="btn-primary" onClick={openCreatePatient}>+ Agregar paciente</button>
-          <button className="btn-secondary" disabled={downloadingTemplate} onClick={handleDownloadTemplate}>
-            {downloadingTemplate ? 'Descargando...' : 'Plantilla Excel'}
-          </button>
-          <button className="btn-secondary" disabled={exporting} onClick={handleExport}>
-            {exporting ? 'Exportando...' : 'Exportar Excel'}
-          </button>
-          <label className="btn-secondary cursor-pointer">
-            {importing ? 'Importando...' : 'Importar Excel'}
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx"
-              className="hidden"
-              disabled={importing}
-              onChange={handleImportFile}
-            />
-          </label>
-        </div>
-      </div>
+      <PageHeader icon={Users} eyebrow="Expedientes" title="Pacientes" description={canOpen ? 'Toca un paciente para abrir su expediente.' : 'Lista de pacientes. Abrir expedientes requiere permiso del administrador.'}
+        actions={<>
+          {can('PATIENTS_IMPORT') && (
+            <button className="btn-ghost" disabled={downloadingTemplate} onClick={handleDownloadTemplate}>
+              {downloadingTemplate ? 'Descargando...' : 'Plantilla'}
+            </button>
+          )}
+          {can('PATIENTS_IMPORT') && (
+            <label className="btn-secondary cursor-pointer">
+              <Upload className="h-4 w-4" /> {importing ? 'Importando...' : 'Importar'}
+              <input ref={importInputRef} type="file" accept=".xlsx" className="hidden" disabled={importing} onChange={handleImportFile} />
+            </label>
+          )}
+          {can('PATIENTS_EXPORT') && (
+            <button className="btn-secondary" disabled={exporting} onClick={handleExport}>
+              <Download className="h-4 w-4" /> {exporting ? 'Exportando...' : 'Exportar'}
+            </button>
+          )}
+          <button className="btn-primary" onClick={openCreatePatient}><Plus className="h-4 w-4" /> Agregar paciente</button>
+        </>} />
 
       <div className="card p-4 mb-4 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[220px]">
@@ -225,70 +233,27 @@ export default function ReceptionPatients() {
 
       <div className="card p-0 overflow-hidden">
         {loading ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : result.content.length === 0 ? (
+          <EmptyState icon={Users} title="Sin pacientes" description="Prueba con otra búsqueda." />
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Nombre</th>
-                    <th className="px-4 py-3 font-medium">Teléfono</th>
-                    <th className="px-4 py-3 font-medium">Correo</th>
-                    <th className="px-4 py-3 font-medium">Cuenta</th>
-                    <th className="px-4 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.content.map((p) => (
-                    <tr
-                      key={p.id}
-                      onClick={() => viewPatient(p.id)}
-                      className="border-t border-gray-100 cursor-pointer hover:bg-gray-50"
-                    >
-                      <td className="px-4 py-3 font-medium text-primary-700">{p.firstName} {p.lastName}</td>
-                      <td className="px-4 py-3 text-gray-600">{p.phone}</td>
-                      <td className="px-4 py-3 text-gray-600">{p.email || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={p.hasAccount ? 'text-green-600' : 'text-gray-400'}>{p.hasAccount ? 'Sí' : 'No'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); viewPatient(p.id) }}
-                          className="text-primary-700 hover:underline"
-                        >
-                          Ver historial
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {result.content.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin pacientes</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-gray-100">
-              {result.content.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => viewPatient(p.id)}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-primary-700">{p.firstName} {p.lastName}</p>
-                    <span className={`text-xs ${p.hasAccount ? 'text-green-600' : 'text-gray-400'}`}>{p.hasAccount ? 'Con cuenta' : 'Sin cuenta'}</span>
+          <ul className="divide-y divide-slate-100">
+            {result.content.map((p) => (
+              <li key={p.id}>
+                <button onClick={() => viewPatient(p.id)} disabled={!canOpen} className="group flex w-full items-center gap-3 px-5 py-3.5 text-left transition hover:bg-slate-50 disabled:cursor-default disabled:hover:bg-transparent">
+                  <Avatar first={p.firstName} last={p.lastName} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">{p.firstName} {p.lastName}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {p.phone}{p.email && ` · ${p.email}`}{p.age != null && ` · ${p.age} años`}
+                    </p>
                   </div>
-                  <p className="text-sm text-gray-600 mt-0.5">{p.phone}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{p.email || '—'}</p>
+                  <Badge tone={p.hasAccount ? 'green' : 'slate'} className="hidden sm:inline-flex">{p.hasAccount ? 'Con cuenta' : 'Sin cuenta'}</Badge>
+                  {canOpen && <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />}
                 </button>
-              ))}
-              {result.content.length === 0 && (
-                <p className="px-4 py-8 text-center text-gray-400 text-sm">Sin pacientes</p>
-              )}
-            </div>
-          </>
+              </li>
+            ))}
+          </ul>
         )}
         <AdminPagination
           page={result.page} size={size} totalPages={result.totalPages} totalElements={result.totalElements}
@@ -321,6 +286,14 @@ export default function ReceptionPatients() {
               </span>
             </label>
             <MedicalInfoFields value={newPatientMedicalInfo} onChange={setNewPatientMedicalInfo} idPrefix="patients-new" />
+            <details className="group rounded-xl ring-1 ring-slate-200">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-700">
+                Datos personales y domicilio <span className="font-normal text-slate-400">(opcional)</span>
+              </summary>
+              <div className="border-t border-slate-100 p-4">
+                <PatientProfileFields value={newPatientProfile} onChange={setNewPatientProfile} />
+              </div>
+            </details>
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
               <button type="submit" disabled={savingPatient} className="btn-primary">{savingPatient ? 'Guardando...' : 'Crear paciente'}</button>

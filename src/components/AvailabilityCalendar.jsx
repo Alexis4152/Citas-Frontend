@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatDateOnly, formatTimeOnly } from '../utils/format'
+import SlotPicker from './SlotPicker'
 
 /**
  * Grid reutilizable de horarios: columnas = días, filas = horas. Sin librería de
@@ -35,6 +36,15 @@ export default function AvailabilityCalendar({
   // cambia la lista de días (ej. al pasar de semana) para no apuntar a un día que ya no existe.
   const [mobileDayIndex, setMobileDayIndex] = useState(0)
   useEffect(() => { setMobileDayIndex(0) }, [days[0]?.date])
+
+  // Elegir horario (público, reprogramar, recepción): selector por día con horarios por
+  // franja y el estado "alguien lo está apartando" (ver SlotPicker).
+  if (mode === 'selectable') {
+    return (
+      <SlotPicker days={days} selected={selected} onSelect={onSelectSlot} loading={loading}
+        allowOverbook={allowOverbook} live={!loading} />
+    )
+  }
 
   if (loading) {
     return <p className="text-sm text-gray-500 py-8 text-center">Cargando disponibilidad...</p>

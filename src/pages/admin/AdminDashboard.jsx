@@ -1,49 +1,21 @@
 import { useEffect, useState } from 'react'
+import { ArrowUpRight, Building2, CalendarDays, CalendarRange, CalendarX2, LayoutDashboard, Stethoscope, UserCog } from 'lucide-react'
 import { Link } from '../../router'
 import { getAdminDashboard } from '../../api/adminDashboard'
+import { PageHeader, StatCard } from '../../components/ui'
+import PendingArrivalAlert from '../../components/PendingArrivalAlert'
+import { localTodayIso } from '../../utils/format'
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-// Lunes a domingo de la semana en curso, para las tarjetas "Citas esta semana" y
-// "Canceladas esta semana" -- el mismo rango que arma ReceptionAppointments.jsx al leer
-// ?from=&to= de la URL.
+// Lunes a domingo de la semana en curso (mismo rango que lee ReceptionAppointments.jsx).
 function currentWeekRange() {
   const now = new Date()
-  const day = now.getDay() // 0=domingo..6=sabado
-  const diffToMonday = day === 0 ? -6 : 1 - day
+  const day = now.getDay()
   const monday = new Date(now)
-  monday.setDate(now.getDate() + diffToMonday)
+  monday.setDate(now.getDate() + (day === 0 ? -6 : 1 - day))
   const sunday = new Date(monday)
   sunday.setDate(monday.getDate() + 6)
-  const fmt = (d) => d.toISOString().slice(0, 10)
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   return { from: fmt(monday), to: fmt(sunday) }
-}
-
-/**
- * Tarjeta de indicador del dashboard. Si recibe `to`, la tarjeta completa es un link (con
- * hover) hacia ese módulo/filtro -- mismo patrón que el Dashboard del proyecto de
- * referencia (StatCard con `to` opcional en DemoPV-Frontend/src/pages/Dashboard.jsx).
- */
-function StatCard({ icon, value, label, to }) {
-  const content = (
-    <>
-      <span className="text-2xl">{icon}</span>
-      <div>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-sm text-gray-500">{label}</p>
-      </div>
-    </>
-  )
-  if (to) {
-    return (
-      <Link to={to} className="card p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
-        {content}
-      </Link>
-    )
-  }
-  return <div className="card p-5 flex items-center gap-4">{content}</div>
 }
 
 export default function AdminDashboard() {
@@ -54,30 +26,31 @@ export default function AdminDashboard() {
     getAdminDashboard().then((r) => setStats(r.data.data)).finally(() => setLoading(false))
   }, [])
 
-  const today = todayIso()
+  const today = localTodayIso()
   const { from: weekStart, to: weekEnd } = currentWeekRange()
 
   const cards = [
-    { key: 'appointmentsToday', label: 'Citas hoy', icon: '📅', to: `/admin/citas?from=${today}&to=${today}` },
-    { key: 'appointmentsThisWeek', label: 'Citas esta semana', icon: '🗓️', to: `/admin/citas?from=${weekStart}&to=${weekEnd}` },
-    { key: 'activeDoctors', label: 'Doctores activos', icon: '🩺', to: '/admin/doctores' },
-    { key: 'activeBranches', label: 'Sedes activas', icon: '🏥', to: '/admin/sedes' },
-    { key: 'activeReceptionists', label: 'Recepcionistas activos', icon: '🧑‍💼', to: '/admin/recepcionistas' },
-    { key: 'cancelledThisWeek', label: 'Canceladas esta semana', icon: '🚫', to: `/admin/citas?from=${weekStart}&to=${weekEnd}&status=CANCELLED` },
+    { key: 'appointmentsToday', label: 'Citas hoy', icon: CalendarDays, tone: 'brand', to: `/admin/citas?from=${today}&to=${today}` },
+    { key: 'appointmentsThisWeek', label: 'Citas esta semana', icon: CalendarRange, tone: 'blue', to: `/admin/citas?from=${weekStart}&to=${weekEnd}` },
+    { key: 'cancelledThisWeek', label: 'Canceladas esta semana', icon: CalendarX2, tone: 'red', to: `/admin/citas?from=${weekStart}&to=${weekEnd}&status=CANCELLED` },
+    { key: 'activeDoctors', label: 'Doctores activos', icon: Stethoscope, tone: 'green', to: '/admin/doctores' },
+    { key: 'activeBranches', label: 'Sedes activas', icon: Building2, tone: 'amber', to: '/admin/sedes' },
+    { key: 'activeReceptionists', label: 'Recepcionistas activos', icon: UserCog, tone: 'blue', to: '/admin/recepcionistas' },
   ]
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
-      {loading ? (
-        <p className="text-gray-500 text-sm">Cargando...</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {cards.map((c) => (
-            <StatCard key={c.key} icon={c.icon} value={stats?.[c.key] ?? 0} label={c.label} to={c.to} />
-          ))}
-        </div>
-      )}
+      <PageHeader icon={LayoutDashboard} eyebrow="Resumen" title="Tablero"
+        description="Lo más importante del hospital de un vistazo. Toca una tarjeta para ver el detalle." />
+      <PendingArrivalAlert />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((c) => (
+          <Link key={c.key} to={c.to} className="group relative block">
+            <StatCard icon={c.icon} tone={c.tone} label={c.label} value={stats?.[c.key] ?? 0} loading={loading} />
+            <ArrowUpRight className="absolute bottom-5 right-5 h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

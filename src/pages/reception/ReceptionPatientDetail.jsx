@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
+import { ArrowLeft, ChevronRight, Droplets, FileText, HeartPulse, MapPin, Pencil, Phone, ShieldAlert, UserRound } from 'lucide-react'
 import { Link } from '../../router'
 import {
-  getPatient, searchAppointments, updatePatientMedicalInfo, listPatientPrescriptions, downloadPrescriptionPdfStaff,
-  listPatientDuplicates, mergePatients,
+  getPatient, searchAppointments, updatePatientMedicalInfo, updatePatientProfile, listPatientPrescriptions, downloadPrescriptionPdfStaff,
+  listPatientDuplicates, mergePatients, downloadAppointmentReceipt,
 } from '../../api/reception'
 import { formatDate, formatDateOnly, formatTimeOnly } from '../../utils/format'
 import { downloadBlob } from '../../utils/media'
 import { useNotify } from '../../context/NotifyContext'
+import { useAuth } from '../../context/AuthContext'
 import AdminPagination from '../../components/AdminPagination'
 import Modal from '../../components/Modal'
 import PrescriptionViewModal from '../../components/PrescriptionViewModal'
+import AppointmentDetailCard from '../../components/AppointmentDetailCard'
+import { AppointmentBadges } from '../../components/StatusBadge'
 import MedicalInfoFields, { EMPTY_MEDICAL_INFO, allergiesLabel, bloodTypeLabel, fromPatientResponse, toMedicalInfoPayload } from '../../components/MedicalInfoFields'
+import PatientProfileFields, { SEX_LABELS, profileFromPatient, profileProblem, toProfilePayload } from '../../components/PatientProfileFields'
+import { Avatar, Badge, EmptyState, Skeleton } from '../../components/ui'
+import { onlyDigits, PHONE_INPUT_PROPS } from '../../utils/phone'
+import { nameError, emailError, phoneError } from '../../utils/validators'
 import { staffBasePath } from '../../utils/staffPath'
 
 const STATUS_TABS = [
@@ -30,16 +38,20 @@ const CANCELLED_BY_LABEL = {
   GUEST: 'el paciente (invitado, sin cuenta)',
 }
 
+const address = (p) => [p.addressLine, p.neighborhood, [p.postalCode && `CP ${p.postalCode}`, p.city].filter(Boolean).join(' '), p.state]
+  .filter(Boolean).join(', ')
+
 /**
- * Ficha de un paciente para recepción/admin: datos de contacto y su historial completo de
- * citas (mismo patrón que AdminDoctorDetail.jsx) -- reemplaza el panel lateral "Historial de
- * citas" que antes vivía dentro de ReceptionPatients.jsx, ahora en su propia pantalla para
- * no amontonar el listado y el detalle en la misma vista.
+ * Expediente del paciente: datos personales y de contacto, información médica, recetas e
+ * historial de citas. Cada cita o receta se abre al tocarla (el detalle trae sus acciones).
+ * Editar y fusionar dependen de los permisos del rol.
  */
 export default function ReceptionPatientDetail() {
   const { id } = useParams()
   const basePath = staffBasePath(useLocation().pathname)
   const { notify, confirmDialog } = useNotify()
+  const { can } = useAuth()
+  const canEdit = can('PATIENTS_EDIT')
   const [patient, setPatient] = useState(null)
   const [loadingProfile, setLoadingProfile] = useState(true)
   const [counts, setCounts] = useState(null)
@@ -47,12 +59,17 @@ export default function ReceptionPatientDetail() {
   const [editingMedicalInfo, setEditingMedicalInfo] = useState(false)
   const [medicalInfoForm, setMedicalInfoForm] = useState(EMPTY_MEDICAL_INFO)
   const [savingMedicalInfo, setSavingMedicalInfo] = useState(false)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [profileForm, setProfileForm] = useState(null)
+  const [savingProfile, setSavingProfile] = useState(false)
 
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(20)
   const [result, setResult] = useState({ content: [], page: 0, totalPages: 0, totalElements: 0 })
   const [loadingAppointments, setLoadingAppointments] = useState(true)
+  const [selected, setSelected] = useState(null)
+  const [busyAction, setBusyAction] = useState(null)
 
   const [prescriptions, setPrescriptions] = useState([])
   const [viewingPrescription, setViewingPrescription] = useState(null)
@@ -67,14 +84,13 @@ export default function ReceptionPatientDetail() {
     setLoadingProfile(true)
     getPatient(id).then((r) => setPatient(r.data.data)).finally(() => setLoadingProfile(false))
 
-    listPatientDuplicates(id).then((r) => setDuplicates(r.data.data)).catch(() => setDuplicates([]))
+    if (can('PATIENTS_MERGE')) listPatientDuplicates(id).then((r) => setDuplicates(r.data.data)).catch(() => setDuplicates([]))
 
     setLoadingPrescriptions(true)
-    listPatientPrescriptions(id).then((r) => setPrescriptions(r.data.data)).finally(() => setLoadingPrescriptions(false))
+    if (!can('PRESCRIPTIONS_VIEW')) setLoadingPrescriptions(false)
+    else listPatientPrescriptions(id).then((r) => setPrescriptions(r.data.data)).catch(() => setPrescriptions([])).finally(() => setLoadingPrescriptions(false))
 
-    // Conteos por estado (patrón: varias llamadas livianas con size=1 solo para leer
-    // totalElements, en vez de traer todas las citas para contarlas en el cliente) -- mismo
-    // patrón que AdminDoctorDetail.jsx.
+    // Conteos por estado: varias llamadas livianas con size=1 solo para leer totalElements.
     Promise.all(
       ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].map((s) =>
         searchAppointments({ patientId: id, status: s, size: 1 }).then((r) => r.data.data.totalElements))
@@ -91,12 +107,34 @@ export default function ReceptionPatientDetail() {
   }, [id, status, page, size, reloadKey])
 
   if (loadingProfile || !patient) {
-    return <p className="text-gray-500 text-sm">Cargando...</p>
+    return <div className="space-y-4"><Skeleton className="h-48 rounded-2xl" /><Skeleton className="h-64 rounded-2xl" /></div>
   }
 
-  function openEditMedicalInfo() {
-    setMedicalInfoForm(fromPatientResponse(patient))
-    setEditingMedicalInfo(true)
+  function openEditProfile() {
+    setProfileForm({ firstName: patient.firstName, lastName: patient.lastName, phone: patient.phone || '', email: patient.email || '', ...profileFromPatient(patient) })
+    setEditingProfile(true)
+  }
+
+  async function handleSaveProfile(e) {
+    e.preventDefault()
+    const labeled = (label, err) => err && `${label}: ${err}`
+    const problem = labeled('Nombre', nameError(profileForm.firstName)) || labeled('Apellidos', nameError(profileForm.lastName))
+      || labeled('Teléfono', phoneError(profileForm.phone)) || labeled('Correo', emailError(profileForm.email, false)) || profileProblem(profileForm)
+    if (problem) {
+      notify(problem, 'error')
+      return
+    }
+    setSavingProfile(true)
+    try {
+      const res = await updatePatientProfile(id, toProfilePayload(profileForm))
+      setPatient((p) => ({ ...p, ...res.data.data }))
+      setEditingProfile(false)
+      notify('Datos del paciente actualizados', 'success')
+    } catch (err) {
+      notify(err.response?.data?.message || 'No se pudo guardar', 'error')
+    } finally {
+      setSavingProfile(false)
+    }
   }
 
   async function handleSaveMedicalInfo(e) {
@@ -141,56 +179,84 @@ export default function ReceptionPatientDetail() {
     }
   }
 
+  async function handleDownloadReceipt(appointmentId) {
+    setBusyAction('download')
+    try {
+      const res = await downloadAppointmentReceipt(appointmentId)
+      downloadBlob(res.data, `comprobante-${appointmentId}.pdf`)
+    } catch {
+      notify('No se pudo descargar el comprobante', 'error')
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  const addr = address(patient)
+
   return (
     <div>
-      <Link to={`${basePath}/pacientes`} className="text-sm text-primary-700 hover:underline">‹ Volver a Pacientes</Link>
+      <Link to={`${basePath}/pacientes`} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-primary-700">
+        <ArrowLeft className="h-4 w-4" /> Pacientes
+      </Link>
 
-      <div className="card p-6 mt-3 mb-6 flex flex-col sm:flex-row gap-6">
-        <div className="w-24 h-24 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-2xl font-bold shrink-0">
-          {patient.firstName?.[0]}{patient.lastName?.[0]}
+      <div className="card mb-5 mt-3 overflow-hidden">
+        <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-start">
+          <Avatar first={patient.firstName} last={patient.lastName} size="h-16 w-16 text-xl" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">{patient.firstName} {patient.lastName}</h1>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                  {patient.age != null && <span>{patient.age} años</span>}
+                  {patient.sex && <span>· {SEX_LABELS[patient.sex]}</span>}
+                  <Badge tone={patient.hasAccount ? 'green' : 'slate'}>{patient.hasAccount ? 'Con cuenta' : 'Sin cuenta'}</Badge>
+                </div>
+              </div>
+              {canEdit && <button onClick={openEditProfile} className="btn-secondary btn-sm"><Pencil className="h-3.5 w-3.5" /> Editar datos</button>}
+            </div>
+            <dl className="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+              <Info icon={Phone} label="Contacto">{patient.phone}{patient.email && <span className="block text-slate-500">{patient.email}</span>}</Info>
+              <Info icon={MapPin} label="Domicilio">{addr || <span className="text-slate-400">Sin capturar</span>}</Info>
+              <Info icon={UserRound} label="Nacimiento y CURP">
+                {patient.birthDate ? formatDateOnly(patient.birthDate) : <span className="text-slate-400">Sin fecha</span>}
+                {patient.curp && <span className="block font-mono text-xs text-slate-500">{patient.curp}</span>}
+              </Info>
+              <Info icon={ShieldAlert} label="Contacto de emergencia">
+                {patient.emergencyContactName ? <>{patient.emergencyContactName} <span className="text-slate-500">· {patient.emergencyContactPhone}</span></> : <span className="text-slate-400">Sin capturar</span>}
+              </Info>
+            </dl>
+          </div>
         </div>
-        <div className="flex-1">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-gray-900">{patient.firstName} {patient.lastName}</h1>
-            <button onClick={openEditMedicalInfo} className="btn-secondary text-sm">Editar información médica</button>
-          </div>
-          <p className="text-sm text-gray-500 mt-1">{patient.phone} {patient.email && `· ${patient.email}`}</p>
-          <p className="text-sm text-gray-500">
-            Cuenta de acceso: <span className={patient.hasAccount ? 'text-green-600 font-medium' : 'text-gray-400'}>{patient.hasAccount ? 'Sí' : 'No'}</span>
-          </p>
-          <div className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-600 space-y-0.5">
-            {/* Rojo = dato sin capturar (falta información médica); verde = ya capturado. */}
-            <p>
-              <span className="font-medium text-gray-800">Alergias:</span>{' '}
-              <span className={`font-medium ${patient.allergies?.trim() ? 'text-green-600' : 'text-red-600'}`}>{allergiesLabel(patient)}</span>
-            </p>
-            <p>
-              <span className="font-medium text-gray-800">Tipo de sangre:</span>{' '}
-              <span className={`font-medium ${patient.bloodType ? 'text-green-600' : 'text-red-600'}`}>{bloodTypeLabel(patient)}</span>
-            </p>
-            {patient.medicalInfoUpdatedAt && (
-              <p className="text-xs text-gray-400">
-                Última modificación: {patient.medicalInfoUpdatedByName || 'el propio paciente (invitado)'}, {formatDate(patient.medicalInfoUpdatedAt)}
-              </p>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-slate-100 bg-slate-50/60 px-6 py-3.5 text-sm">
+          <span className="flex items-center gap-1.5"><HeartPulse className="h-4 w-4 text-slate-400" /> Alergias:
+            <span className={`font-medium ${patient.allergies?.trim() ? 'text-slate-800' : 'text-rose-600'}`}>{allergiesLabel(patient)}</span></span>
+          <span className="flex items-center gap-1.5"><Droplets className="h-4 w-4 text-slate-400" /> Sangre:
+            <span className={`font-medium ${patient.bloodType ? 'text-slate-800' : 'text-rose-600'}`}>{bloodTypeLabel(patient)}</span></span>
+          {patient.medicalInfoUpdatedAt && (
+            <span className="text-xs text-slate-400">Actualizada por {patient.medicalInfoUpdatedByName || 'el propio paciente (invitado)'}, {formatDate(patient.medicalInfoUpdatedAt)}</span>
+          )}
+          {canEdit && (
+            <button className="btn-ghost btn-sm ml-auto" onClick={() => { setMedicalInfoForm(fromPatientResponse(patient)); setEditingMedicalInfo(true) }}>
+              <Pencil className="h-3.5 w-3.5" /> Información médica
+            </button>
+          )}
         </div>
       </div>
 
       {duplicates.length > 0 && (
-        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm">
+        <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">
           <p className="font-semibold text-amber-900">Posibles registros duplicados</p>
-          <p className="text-amber-800 text-xs mt-0.5 mb-3">
+          <p className="mb-3 mt-0.5 text-xs text-amber-800">
             Comparten teléfono o correo con este paciente. Una familia puede compartir teléfono: revisa antes de fusionar.
           </p>
           <ul className="space-y-2">
             {duplicates.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-3 flex-wrap bg-white border border-amber-100 rounded-lg px-3 py-2">
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white px-3 py-2">
                 <div className="min-w-0">
-                  <Link to={`${basePath}/pacientes/${d.id}`} className="font-medium text-gray-900 hover:underline">{d.firstName} {d.lastName}</Link>
-                  <p className="text-xs text-gray-500">{d.phone}{d.email && ` · ${d.email}`}{d.hasAccount && ' · con cuenta'}</p>
+                  <Link to={`${basePath}/pacientes/${d.id}`} className="font-medium text-slate-900 hover:underline">{d.firstName} {d.lastName}</Link>
+                  <p className="text-xs text-slate-500">{d.phone}{d.email && ` · ${d.email}`}{d.hasAccount && ' · con cuenta'}</p>
                 </div>
-                <button type="button" disabled={merging} onClick={() => handleMerge(d)} className="btn-secondary text-xs shrink-0">
+                <button type="button" disabled={merging} onClick={() => handleMerge(d)} className="btn-secondary btn-sm shrink-0">
                   {merging ? 'Fusionando...' : 'Fusionar en este paciente'}
                 </button>
               </li>
@@ -199,146 +265,81 @@ export default function ReceptionPatientDetail() {
         </div>
       )}
 
-      {editingMedicalInfo && (
-        <Modal title="Editar información médica" onClose={() => setEditingMedicalInfo(false)} maxWidth="max-w-sm">
-          <form onSubmit={handleSaveMedicalInfo} className="space-y-4">
-            <MedicalInfoFields value={medicalInfoForm} onChange={setMedicalInfoForm} idPrefix="patient-detail" />
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-              <button type="button" className="btn-secondary" onClick={() => setEditingMedicalInfo(false)}>Cancelar</button>
-              <button type="submit" disabled={savingMedicalInfo} className="btn-primary">{savingMedicalInfo ? 'Guardando...' : 'Guardar'}</button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
-        <StatCard label="Total" value={counts?.total} />
-        <StatCard label="Programadas" value={counts?.scheduled} color="text-primary-700" />
-        <StatCard label="Atendidas" value={counts?.completed} color="text-green-700" />
-        <StatCard label="Canceladas" value={counts?.cancelled} color="text-red-600" />
-        <StatCard label="No asistió" value={counts?.noShow} color="text-gray-500" />
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <Count label="Total" value={counts?.total} />
+        <Count label="Programadas" value={counts?.scheduled} />
+        <Count label="Atendidas" value={counts?.completed} />
+        <Count label="Canceladas" value={counts?.cancelled} />
+        <Count label="No asistió" value={counts?.noShow} />
       </div>
 
-      <div className="card p-0 overflow-hidden mb-6">
-        <div className="px-4 py-3 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Historial de recetas</h2>
-          <p className="text-xs text-gray-500">Solo lectura -- las genera el doctor durante la consulta.</p>
+      {can('PRESCRIPTIONS_VIEW') && <div className="card mb-5 overflow-hidden">
+        <div className="border-b border-slate-100 px-5 py-3.5">
+          <h2 className="font-semibold text-slate-900">Recetas</h2>
+          <p className="text-xs text-slate-500">Las genera el doctor durante la consulta. Toca una para verla o descargarla.</p>
         </div>
         {loadingPrescriptions ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="p-5"><Skeleton className="h-12" /></div>
         ) : prescriptions.length === 0 ? (
-          <p className="text-gray-400 text-sm p-4 text-center">Sin recetas</p>
+          <p className="p-5 text-center text-sm text-slate-400">Sin recetas</p>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-slate-100">
             {prescriptions.map((p) => (
-              <li key={p.id} className="px-4 py-3 flex items-center justify-between gap-3 text-sm">
-                <div className="min-w-0">
-                  <p className="text-gray-900 font-medium">
-                    {p.doctorName} · {p.specialtyName}
-                    {p.voided && <span className="ml-2 text-xs font-medium text-red-600">Anulada</span>}
-                  </p>
-                  <p className="text-gray-500 text-xs">Cita del {formatDateOnly(p.appointmentDate)} · emitida el {formatDate(p.createdAt)}</p>
-                  {p.voided && p.voidReason && <p className="text-red-500 text-xs">Motivo de la anulación: {p.voidReason}</p>}
-                </div>
-                <div className="shrink-0 space-x-3">
-                  <button
-                    className="text-primary-700 text-xs font-medium hover:underline"
-                    onClick={() => setViewingPrescription({ ...p, patientName: p.patientName || `${patient?.firstName ?? ''} ${patient?.lastName ?? ''}`.trim() })}
-                  >
-                    Ver
-                  </button>
-                  <button
-                    className="text-primary-700 text-xs font-medium hover:underline"
-                    onClick={() => handleDownloadPrescription(p.id)}
-                  >
-                    Descargar PDF
-                  </button>
-                </div>
+              <li key={p.id}>
+                <button className="group flex w-full items-center gap-3 px-5 py-3 text-left text-sm transition hover:bg-slate-50"
+                  onClick={() => setViewingPrescription({ ...p, patientName: p.patientName || `${patient.firstName} ${patient.lastName}` })}>
+                  <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-slate-900">{p.doctorName} · {p.specialtyName}</p>
+                    <p className="text-xs text-slate-500">Cita del {formatDateOnly(p.appointmentDate)} · emitida el {formatDate(p.createdAt)}</p>
+                    {p.voided && p.voidReason && <p className="text-xs text-rose-500">Anulada: {p.voidReason}</p>}
+                  </div>
+                  {p.voided && <Badge tone="red">Anulada</Badge>}
+                  <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary-600" />
+                </button>
               </li>
             ))}
           </ul>
         )}
-      </div>
+      </div>}
 
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap gap-2">
+      <div className="card overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3.5">
+          <h2 className="mr-auto font-semibold text-slate-900">Historial de citas</h2>
           {STATUS_TABS.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => { setStatus(t.value); setPage(0) }}
-              className={`text-xs font-medium px-3 py-1.5 rounded-full ${
-                status === t.value ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
+            <button key={t.value} onClick={() => { setStatus(t.value); setPage(0) }}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${status === t.value ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
               {t.label}
             </button>
           ))}
         </div>
-
         {loadingAppointments ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="space-y-3 p-5">{[0, 1].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : result.content.length === 0 ? (
+          <EmptyState title="Sin citas" description="Aquí aparecerán sus citas." />
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Doctor</th>
-                    <th className="px-4 py-3 font-medium">Fecha</th>
-                    <th className="px-4 py-3 font-medium">Sede</th>
-                    <th className="px-4 py-3 font-medium">Estado</th>
-                    <th className="px-4 py-3 font-medium">Detalle</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.content.map((a) => (
-                    <tr key={a.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3 font-medium text-gray-900">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName}</td>
-                      <td className="px-4 py-3 text-gray-600 capitalize">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)}</td>
-                      <td className="px-4 py-3 text-gray-600">{a.branch?.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{a.status}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {a.status === 'CANCELLED' && (
-                          <>
-                            Cancelada por {CANCELLED_BY_LABEL[a.cancelledByRole] || a.cancelledByName}
-                            {a.cancelReason && <> — {a.cancelReason}</>}
-                          </>
-                        )}
-                        {a.status === 'SCHEDULED' && a.reasonForVisit}
-                      </td>
-                    </tr>
-                  ))}
-                  {result.content.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin citas</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-gray-100">
-              {result.content.map((a) => (
-                <div key={a.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-gray-900">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName}</p>
-                    <span className="text-xs text-gray-500 shrink-0">{a.status}</span>
+          <ul className="divide-y divide-slate-100">
+            {result.content.map((a) => (
+              <li key={a.id}>
+                <button onClick={() => setSelected(a)} className="group flex w-full flex-col gap-2 px-5 py-3.5 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:gap-4">
+                  <div className="w-36 shrink-0 text-sm">
+                    <p className="font-medium capitalize text-slate-900">{formatDateOnly(a.appointmentDate)}</p>
+                    <p className="text-xs tabular-nums text-slate-500">{formatTimeOnly(a.startTime)}</p>
                   </div>
-                  <p className="text-sm text-gray-600 mt-0.5 capitalize">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)} · {a.branch?.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {a.status === 'CANCELLED' && (
-                      <>
-                        Cancelada por {CANCELLED_BY_LABEL[a.cancelledByRole] || a.cancelledByName}
-                        {a.cancelReason && <> — {a.cancelReason}</>}
-                      </>
-                    )}
-                    {a.status === 'SCHEDULED' && a.reasonForVisit}
-                  </p>
-                </div>
-              ))}
-              {result.content.length === 0 && (
-                <p className="px-4 py-8 text-center text-gray-400 text-sm">Sin citas</p>
-              )}
-            </div>
-          </>
+                  <div className="min-w-0 flex-1 text-sm">
+                    <p className="truncate font-medium text-slate-800">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {a.branch?.name}
+                      {a.status === 'CANCELLED' && ` · Cancelada por ${CANCELLED_BY_LABEL[a.cancelledByRole] || a.cancelledByName}`}
+                      {a.status === 'SCHEDULED' && a.reasonForVisit && ` · ${a.reasonForVisit}`}
+                    </p>
+                  </div>
+                  <AppointmentBadges appointment={a} />
+                  <ChevronRight className="hidden h-4 w-4 text-slate-300 group-hover:text-primary-600 sm:block" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         <AdminPagination
           page={result.page} size={size} totalPages={result.totalPages} totalElements={result.totalElements}
@@ -346,6 +347,41 @@ export default function ReceptionPatientDetail() {
           onPageChange={setPage} onSizeChange={(s) => { setSize(s); setPage(0) }}
         />
       </div>
+
+      {selected && (
+        <AppointmentDetailCard appointment={selected} onClose={() => setSelected(null)} busyAction={busyAction}
+          onDownload={() => handleDownloadReceipt(selected.id)} />
+      )}
+
+      {editingProfile && (
+        <Modal title="Datos del paciente" onClose={() => setEditingProfile(false)} maxWidth="max-w-2xl">
+          <form onSubmit={handleSaveProfile} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <L label="Nombre(s)"><input required maxLength={100} className="input" value={profileForm.firstName} onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })} /></L>
+              <L label="Apellidos"><input required maxLength={100} className="input" value={profileForm.lastName} onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })} /></L>
+              <L label="Teléfono"><input required className="input" {...PHONE_INPUT_PROPS} value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: onlyDigits(e.target.value) })} /></L>
+              <L label="Correo (opcional)"><input type="email" className="input" value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value.trim() })} /></L>
+            </div>
+            <PatientProfileFields value={profileForm} onChange={setProfileForm} />
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+              <button type="button" className="btn-secondary" onClick={() => setEditingProfile(false)}>Cancelar</button>
+              <button type="submit" disabled={savingProfile} className="btn-primary">{savingProfile ? 'Guardando...' : 'Guardar datos'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editingMedicalInfo && (
+        <Modal title="Editar información médica" onClose={() => setEditingMedicalInfo(false)} maxWidth="max-w-sm">
+          <form onSubmit={handleSaveMedicalInfo} className="space-y-4">
+            <MedicalInfoFields value={medicalInfoForm} onChange={setMedicalInfoForm} idPrefix="patient-detail" />
+            <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+              <button type="button" className="btn-secondary" onClick={() => setEditingMedicalInfo(false)}>Cancelar</button>
+              <button type="submit" disabled={savingMedicalInfo} className="btn-primary">{savingMedicalInfo ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {viewingPrescription && (
         <PrescriptionViewModal
@@ -358,11 +394,32 @@ export default function ReceptionPatientDetail() {
   )
 }
 
-function StatCard({ label, value, color = 'text-gray-900' }) {
+function Info({ icon: Icon, label, children }) {
+  return (
+    <div className="flex gap-2.5">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+      <div className="min-w-0">
+        <dt className="text-xs font-medium text-slate-400">{label}</dt>
+        <dd className="text-slate-800">{children}</dd>
+      </div>
+    </div>
+  )
+}
+
+function Count({ label, value }) {
   return (
     <div className="card p-4 text-center">
-      <p className={`text-2xl font-bold ${color}`}>{value ?? '—'}</p>
-      <p className="text-xs text-gray-500 mt-1">{label}</p>
+      <p className="font-display text-2xl font-semibold tabular-nums text-slate-900">{value ?? '—'}</p>
+      <p className="mt-1 text-xs text-slate-500">{label}</p>
     </div>
+  )
+}
+
+function L({ label, children }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block font-medium text-slate-700">{label}</span>
+      {children}
+    </label>
   )
 }

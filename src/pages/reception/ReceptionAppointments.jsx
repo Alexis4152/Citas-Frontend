@@ -9,12 +9,16 @@ import { useAuth } from '../../context/AuthContext'
 import { useNotify } from '../../context/NotifyContext'
 import { downloadBlob } from '../../utils/media'
 import {
-  formatDateOnly, formatTimeOnly, canMarkAppointmentCompleted, canMarkAppointmentNoShow, canRegisterArrival,
+  formatDateOnly, formatTimeOnly,
 } from '../../utils/format'
 import AdminPagination from '../../components/AdminPagination'
 import LoadingOverlay from '../../components/LoadingOverlay'
-import StatusBadge, { STATUS_LABELS, AppointmentFlags, PaymentBadge } from '../../components/StatusBadge'
+import { STATUS_LABELS, AppointmentBadges } from '../../components/StatusBadge'
 import ChargeModal from '../../components/ChargeModal'
+import AppointmentDetailCard from '../../components/AppointmentDetailCard'
+import { ChevronRight } from 'lucide-react'
+import { useNavigate as useHospitalNavigate } from '../../router'
+import { staffBasePath } from '../../utils/staffPath'
 import { formatMoney, hasPrice } from '../../utils/money'
 import SearchableSelect from '../../components/SearchableSelect'
 import usePolling from '../../hooks/usePolling'
@@ -75,7 +79,7 @@ export default function ReceptionAppointments() {
   // correcto, salte a la vista el registro exacto -- patrón: mismo location.state que ya usan
   // AdminDoctorForm/etc. para pasar contexto entre pantallas sin URL).
   const highlightAppointmentId = location.state?.highlightAppointmentId
-  const { user } = useAuth()
+  const { user, can } = useAuth()
   // null = recepcionista general (o admin), sin restricción. Ver ReceptionNewAppointment.jsx.
   const allowedSpecialtyIds = user?.specialties?.length ? new Set(user.specialties.map((s) => s.id)) : null
   const [doctors, setDoctors] = useState([])
@@ -90,6 +94,9 @@ export default function ReceptionAppointments() {
   const [rescheduling, setRescheduling] = useState(null)
   // Cita que se está cobrando (se abre sola al marcarla atendida, o con el botón "Cobrar").
   const [charging, setCharging] = useState(null)
+  // Registro abierto en el panel de detalle (clic en la fila).
+  const [selected, setSelected] = useState(null)
+  const goTo = useHospitalNavigate()
   // Evita doble clic en "Cancelar"/"Comprobante" de una fila mientras la petición está en curso.
   const [busyKey, setBusyKey] = useState(null)
   // Colapsado de las secciones de especialidad/doctor en la vista agrupada -- vacío por
@@ -282,71 +289,11 @@ export default function ReceptionAppointments() {
   // un doctor específico -- si filtras por doctor, un solo grupo con un solo header no aporta.
   const groups = isGrouped ? groupBySpecialtyAndDoctor(result.content) : null
 
-  function renderActions(a) {
-    return (
-      <>
-        <button
-          onClick={() => handleDownloadReceipt(a.id)}
-          disabled={busyKey === `download-${a.id}`}
-          className="text-primary-700 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-        >
-          {busyKey === `download-${a.id}` ? 'Descargando...' : 'Comprobante'}
-        </button>
-        {a.status === 'SCHEDULED' && (
-          <>
-            <button onClick={() => setRescheduling(a)} className="text-primary-700 hover:underline mr-3">Reprogramar</button>
-            <button
-              onClick={() => handleCancel(a.id)}
-              disabled={busyKey === `cancel-${a.id}`}
-              className="text-red-600 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-            >
-              {busyKey === `cancel-${a.id}` ? 'Cancelando...' : 'Cancelar'}
-            </button>
-          </>
-        )}
-        {canRegisterArrival(a) && (
-          <button
-            onClick={() => handleArrived(a.id)}
-            disabled={busyKey === `arrived-${a.id}`}
-            className="text-emerald-700 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-          >
-            {busyKey === `arrived-${a.id}` ? 'Guardando...' : 'Llegó'}
-          </button>
-        )}
-        {/* Solo cuando aplica: ya empezó / el paciente llegó / corrección de un "no asistió"
-            (el backend igual lo valida). */}
-        {canMarkAppointmentCompleted(a) && (
-          <button
-            onClick={() => handleMarkCompleted(a)}
-            disabled={busyKey === `complete-${a.id}`}
-            className="text-green-700 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-          >
-            {busyKey === `complete-${a.id}` ? 'Guardando...' : a.status === 'NO_SHOW' ? 'Corregir a atendida' : 'Marcar atendida'}
-          </button>
-        )}
-        {canMarkAppointmentNoShow(a) && (
-          <button
-            onClick={() => handleMarkNoShow(a.id)}
-            disabled={busyKey === `no-show-${a.id}`}
-            className="text-gray-600 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-          >
-            {busyKey === `no-show-${a.id}` ? 'Guardando...' : 'No asistió'}
-          </button>
-        )}
-        {(a.status === 'COMPLETED' && (a.paymentStatus === 'UNPAID' || a.paymentStatus === 'PENDING')) && (
-          <button onClick={() => setCharging(a)} className="text-primary-700 font-semibold hover:underline mr-3">Cobrar</button>
-        )}
-        {a.canRelease && (
-          <button
-            onClick={() => handleRelease(a.id)}
-            disabled={busyKey === `release-${a.id}`}
-            className="text-amber-700 hover:underline mr-3 disabled:opacity-50 disabled:no-underline"
-          >
-            {busyKey === `release-${a.id}` ? 'Liberando...' : 'Liberar horario'}
-          </button>
-        )}
-      </>
-    )
+  // Acción desde el panel de detalle: corre y cierra el panel (la lista se recarga sola).
+  const fromDrawer = (fn) => async () => {
+    const target = selected
+    setSelected(null)
+    await fn(target)
   }
 
   return (
@@ -354,7 +301,7 @@ export default function ReceptionAppointments() {
       <LoadingOverlay show={!!busyKey && busyKey.startsWith('cancel-')} message="Cancelando la cita..." />
       <LoadingOverlay show={!!busyKey && busyKey.startsWith('download-')} message="Generando comprobante..." />
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Citas</h1>
+        <h1 className="page-title">Citas</h1>
         {allowedSpecialtyIds && (
           <p className="text-sm text-gray-500 mt-1">
             Mostrando solo citas de: {user.specialties.map((s) => s.name).join(', ')}.
@@ -460,7 +407,11 @@ export default function ReceptionAppointments() {
                               <div
                                 key={a.id}
                                 id={`appointment-row-${a.id}`}
-                                className={`flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3 pl-4 sm:pl-14 pr-4 py-3 sm:py-2.5 text-sm ${
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => setSelected(a)}
+                                onKeyDown={(e) => e.key === 'Enter' && setSelected(a)}
+                                className={`group flex cursor-pointer flex-col gap-2 py-3 pl-4 pr-4 text-sm transition hover:bg-slate-50 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5 sm:pl-14 ${
                                   String(a.id) === String(highlightAppointmentId) ? 'bg-primary-50 ring-2 ring-inset ring-primary-300' : ''
                                 }`}
                               >
@@ -477,8 +428,8 @@ export default function ReceptionAppointments() {
                                 </div>
                                 <span className="text-gray-600 capitalize sm:w-[150px] sm:shrink-0 sm:truncate">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)}</span>
                                 <span className="text-gray-500 sm:w-[110px] sm:shrink-0 sm:truncate">{a.branch?.name}</span>
-                                <div className="sm:w-[100px] sm:shrink-0"><StatusBadge status={a.status} /><AppointmentFlags appointment={a} /><PaymentBadge appointment={a} />{hasPrice(a.price) && a.status !== 'CANCELLED' && <span className="ml-1 text-xs text-gray-500">{formatMoney(a.price)}</span>}</div>
-                                <div className="sm:ml-auto flex flex-wrap items-center gap-x-1 sm:whitespace-nowrap pt-1 sm:pt-0">{renderActions(a)}</div>
+                                <div className="flex flex-1 flex-wrap items-center gap-1.5"><AppointmentBadges appointment={a} />{hasPrice(a.price) && a.status !== 'CANCELLED' && <span className="text-xs text-gray-500">{formatMoney(a.price)}</span>}</div>
+                                <ChevronRight className="hidden h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-primary-600 sm:block" />
                               </div>
                             ))}
                           </div>
@@ -512,7 +463,8 @@ export default function ReceptionAppointments() {
                     <tr
                       key={a.id}
                       id={`appointment-row-${a.id}`}
-                      className={`border-t border-gray-100 ${
+                      onClick={() => setSelected(a)}
+                      className={`group cursor-pointer border-t border-gray-100 transition hover:bg-slate-50 ${
                         String(a.id) === String(highlightAppointmentId) ? 'bg-primary-50 ring-2 ring-inset ring-primary-300' : ''
                       }`}
                     >
@@ -523,8 +475,8 @@ export default function ReceptionAppointments() {
                       <td className="px-4 py-3 text-gray-600">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName}</td>
                       <td className="px-4 py-3 text-gray-600 capitalize">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)}</td>
                       <td className="px-4 py-3 text-gray-600">{a.branch?.name}</td>
-                      <td className="px-4 py-3"><StatusBadge status={a.status} /><AppointmentFlags appointment={a} /><PaymentBadge appointment={a} />{hasPrice(a.price) && a.status !== 'CANCELLED' && <span className="ml-1 text-xs text-gray-500">{formatMoney(a.price)}</span>}</td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">{renderActions(a)}</td>
+                      <td className="px-4 py-3"><div className="flex flex-wrap items-center gap-1.5"><AppointmentBadges appointment={a} />{hasPrice(a.price) && a.status !== 'CANCELLED' && <span className="text-xs text-gray-500">{formatMoney(a.price)}</span>}</div></td>
+                      <td className="w-8 px-4 py-3"><ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-primary-600" /></td>
                     </tr>
                   ))}
                   {result.content.length === 0 && (
@@ -539,7 +491,8 @@ export default function ReceptionAppointments() {
                 <div
                   key={a.id}
                   id={`appointment-row-${a.id}`}
-                  className={`px-4 py-3 ${
+                  onClick={() => setSelected(a)}
+                  className={`cursor-pointer px-4 py-3 active:bg-slate-50 ${
                     String(a.id) === String(highlightAppointmentId) ? 'bg-primary-50 ring-2 ring-inset ring-primary-300' : ''
                   }`}
                 >
@@ -548,11 +501,11 @@ export default function ReceptionAppointments() {
                       <p className="font-medium text-gray-900">{a.patient?.firstName} {a.patient?.lastName}</p>
                       <p className="text-xs text-gray-500">{a.patient?.phone}</p>
                     </div>
-                    <StatusBadge status={a.status} /><AppointmentFlags appointment={a} /><PaymentBadge appointment={a} />{hasPrice(a.price) && a.status !== 'CANCELLED' && <span className="ml-1 text-xs text-gray-500">{formatMoney(a.price)}</span>}
+                    <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
                   </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5"><AppointmentBadges appointment={a} />{hasPrice(a.price) && a.status !== 'CANCELLED' && <span className="text-xs text-gray-500">{formatMoney(a.price)}</span>}</div>
                   <p className="text-sm text-gray-600 mt-1">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName}</p>
                   <p className="text-sm text-gray-500 capitalize">{formatDateOnly(a.appointmentDate)}, {formatTimeOnly(a.startTime)} · {a.branch?.name}</p>
-                  <div className="flex flex-wrap items-center gap-x-1 mt-2 text-sm">{renderActions(a)}</div>
                 </div>
               ))}
               {result.content.length === 0 && (
@@ -574,6 +527,21 @@ export default function ReceptionAppointments() {
           />
         )}
       </div>
+
+      <AppointmentDetailCard
+        appointment={selected}
+        onClose={() => setSelected(null)}
+        busyAction={busyKey ? busyKey.split('-')[0] : null}
+        onDownload={() => handleDownloadReceipt(selected.id)}
+        onReschedule={can('APPOINTMENTS_RESCHEDULE') ? () => { setRescheduling(selected); setSelected(null) } : undefined}
+        onCancel={can('APPOINTMENTS_CANCEL') ? fromDrawer((a) => handleCancel(a.id)) : undefined}
+        onRelease={can('APPOINTMENTS_RELEASE') ? fromDrawer((a) => handleRelease(a.id)) : undefined}
+        onMarkArrived={can('APPOINTMENTS_STATUS') ? fromDrawer((a) => handleArrived(a.id)) : undefined}
+        onMarkCompleted={can('APPOINTMENTS_STATUS') ? fromDrawer((a) => handleMarkCompleted(a)) : undefined}
+        onMarkNoShow={can('APPOINTMENTS_STATUS') ? fromDrawer((a) => handleMarkNoShow(a.id)) : undefined}
+        onCharge={can('PAYMENTS_CHARGE') ? () => { setCharging(selected); setSelected(null) } : undefined}
+        onViewPatient={selected?.patient?.id && can('PATIENTS_MODULE') ? () => goTo(`${staffBasePath(location.pathname)}/pacientes/${selected.patient.id}`) : undefined}
+      />
 
       {charging && (
         <ChargeModal appointment={charging} onClose={() => setCharging(null)} onPaid={() => { setCharging(null); load() }} />

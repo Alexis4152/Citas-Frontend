@@ -146,7 +146,7 @@ export default function CancelAppointment() {
       <LoadingOverlay show={downloading} message="Generando comprobante..." />
       <LoadingOverlay show={loadingAppointment} message="Buscando tu cita..." />
       <div className="w-full max-w-lg card p-6 sm:p-8">
-        <h1 className="text-xl font-bold text-gray-900 mb-1">Mi cita</h1>
+        <h1 className="page-title mb-1">Mi cita</h1>
 
         {isPatient ? (
           <>

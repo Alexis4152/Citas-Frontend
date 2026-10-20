@@ -53,45 +53,65 @@ import AdminReceptionists from './pages/admin/AdminReceptionists'
 import AdminHospitalConfig from './pages/admin/AdminHospitalConfig'
 import AdminEmailConfig from './pages/admin/AdminEmailConfig'
 import AdminPayments from './pages/admin/AdminPayments'
+import AdminArcoRequests from './pages/admin/AdminArcoRequests'
+import AdminAuditLog from './pages/admin/AdminAuditLog'
+import AdminPermissions from './pages/admin/AdminPermissions'
+import ReportsPage from './pages/ReportsPage'
+import ArcoRequestPage from './pages/ArcoRequestPage'
+import PrivacyNotice from './pages/PrivacyNotice'
+import MyArcoRequests from './pages/MyArcoRequests'
+import SuperAdminArco from './pages/platform/SuperAdminArco'
+import {
+  Banknote, Building2, CalendarDays, CalendarPlus, CalendarRange, ClipboardList, Clock3, Hospital, LayoutDashboard, Mail,
+  BarChart3, History, KeyRound, Palette, Palmtree, Pill, Receipt, ShieldCheck, Stethoscope, Tags, UserCog, Users, Wallet,
+} from 'lucide-react'
 
 const DOCTOR_LINKS = [
-  { to: '/doctor', end: true, icon: '📅', label: 'Mi agenda' },
-  { to: '/doctor/citas', icon: '📋', label: 'Mis citas' },
-  { to: '/doctor/pacientes', icon: '👥', label: 'Pacientes' },
-  { to: '/doctor/recetas', icon: '💊', label: 'Recetas' },
-  { to: '/doctor/cobro', icon: '💵', label: 'Cobrar' },
-  { to: '/doctor/corte', icon: '🧾', label: 'Corte de caja' },
-  { to: '/doctor/cobros', icon: '💰', label: 'Cobros' },
-  { to: '/doctor/horario', icon: '🕒', label: 'Mi horario' },
-  { to: '/doctor/ausencias', icon: '🏖️', label: 'Ausencias' },
+  { section: 'Consulta', to: '/doctor', end: true, icon: CalendarDays, label: 'Mi agenda' },
+  { section: 'Consulta', to: '/doctor/citas', icon: ClipboardList, label: 'Mis citas' },
+  { section: 'Consulta', to: '/doctor/pacientes', icon: Users, label: 'Pacientes', perm: 'PATIENTS_MODULE' },
+  { section: 'Consulta', to: '/doctor/recetas', icon: Pill, label: 'Recetas', perm: 'PRESCRIPTIONS_VIEW' },
+  { section: 'Caja', to: '/doctor/cobro', icon: Banknote, label: 'Cobrar', perm: 'PAYMENTS_CHARGE' },
+  { section: 'Caja', to: '/doctor/corte', icon: Receipt, label: 'Corte de caja', perm: 'CASH_CUT' },
+  { section: 'Caja', to: '/doctor/cobros', icon: Wallet, label: 'Mis cobros' },
+  { section: 'Caja', to: '/doctor/reportes', icon: BarChart3, label: 'Reportes', perm: 'REPORTS_VIEW' },
+  { section: 'Disponibilidad', to: '/doctor/horario', icon: Clock3, label: 'Mi horario' },
+  { section: 'Disponibilidad', to: '/doctor/ausencias', icon: Palmtree, label: 'Ausencias' },
 ]
 
 const RECEPTION_LINKS = [
-  { to: '/recepcion', end: true, icon: '📊', label: 'Hoy' },
-  { to: '/recepcion/citas', icon: '📋', label: 'Citas' },
-  { to: '/recepcion/nueva-cita', icon: '➕', label: 'Nueva cita' },
-  { to: '/recepcion/cobro', icon: '💵', label: 'Cobrar' },
-  { to: '/recepcion/agenda-doctores', icon: '🗓️', label: 'Agenda doctores' },
-  { to: '/recepcion/corte', icon: '🧾', label: 'Corte de caja' },
+  { section: 'Operación', to: '/recepcion', end: true, icon: LayoutDashboard, label: 'Hoy' },
+  { section: 'Operación', to: '/recepcion/citas', icon: ClipboardList, label: 'Citas' },
+  { section: 'Operación', to: '/recepcion/nueva-cita', icon: CalendarPlus, label: 'Nueva cita', perm: 'APPOINTMENTS_CREATE' },
+  { section: 'Operación', to: '/recepcion/agenda-doctores', icon: CalendarRange, label: 'Agenda de doctores', perm: 'AGENDA_DOCTORS' },
+  { section: 'Operación', to: '/recepcion/pacientes', icon: Users, label: 'Pacientes', perm: 'PATIENTS_MODULE' },
+  { section: 'Caja', to: '/recepcion/cobro', icon: Banknote, label: 'Cobrar', perm: 'PAYMENTS_CHARGE' },
+  { section: 'Caja', to: '/recepcion/corte', icon: Receipt, label: 'Corte de caja', perm: 'CASH_CUT' },
+  { section: 'Caja', to: '/recepcion/reportes', icon: BarChart3, label: 'Reportes', perm: 'REPORTS_VIEW' },
 ]
 
 const ADMIN_LINKS = [
-  { to: '/admin', end: true, icon: '📊', label: 'Dashboard' },
-  { to: '/admin/citas', icon: '📋', label: 'Citas' },
-  { to: '/admin/pacientes', icon: '👥', label: 'Pacientes' },
-  { to: '/admin/cobro', icon: '💵', label: 'Cobrar' },
-  { to: '/admin/corte', icon: '🧾', label: 'Corte de caja' },
-  { to: '/admin/cobros', icon: '💰', label: 'Cobros' },
-  { to: '/admin/sedes', icon: '🏥', label: 'Sedes' },
-  { to: '/admin/especialidades', icon: '🏷️', label: 'Especialidades' },
-  { to: '/admin/doctores', icon: '🩺', label: 'Doctores' },
-  { to: '/admin/recepcionistas', icon: '🧑‍💼', label: 'Recepcionistas' },
-  { to: '/admin/configuracion', icon: '⚙️', label: 'Configuración' },
-  { to: '/admin/correo', icon: '✉️', label: 'Correo' },
+  { section: 'Operación', to: '/admin', end: true, icon: LayoutDashboard, label: 'Tablero' },
+  { section: 'Operación', to: '/admin/citas', icon: ClipboardList, label: 'Citas' },
+  { section: 'Operación', to: '/admin/pacientes', icon: Users, label: 'Pacientes' },
+  { section: 'Caja', to: '/admin/cobro', icon: Banknote, label: 'Cobrar' },
+  { section: 'Caja', to: '/admin/corte', icon: Receipt, label: 'Corte de caja' },
+  { section: 'Caja', to: '/admin/cobros', icon: Wallet, label: 'Ingresos' },
+  { section: 'Caja', to: '/admin/reportes', icon: BarChart3, label: 'Reportes' },
+  { section: 'Catálogo', to: '/admin/doctores', icon: Stethoscope, label: 'Doctores' },
+  { section: 'Catálogo', to: '/admin/especialidades', icon: Tags, label: 'Especialidades' },
+  { section: 'Catálogo', to: '/admin/sedes', icon: Building2, label: 'Sedes' },
+  { section: 'Catálogo', to: '/admin/recepcionistas', icon: UserCog, label: 'Recepción' },
+  { section: 'Ajustes', to: '/admin/configuracion', icon: Palette, label: 'Hospital y marca' },
+  { section: 'Ajustes', to: '/admin/correo', icon: Mail, label: 'Correo' },
+  { section: 'Ajustes', to: '/admin/permisos', icon: KeyRound, label: 'Roles y permisos' },
+  { section: 'Ajustes', to: '/admin/solicitudes-arco', icon: ShieldCheck, label: 'Solicitudes ARCO', badge: 'arco' },
+  { section: 'Ajustes', to: '/admin/bitacora', icon: History, label: 'Bitácora' },
 ]
 
 const SUPERADMIN_LINKS = [
-  { to: '/superadmin', end: true, icon: '🏥', label: 'Hospitales' },
+  { section: 'Plataforma', to: '/superadmin', end: true, icon: Hospital, label: 'Hospitales' },
+  { section: 'Plataforma', to: '/superadmin/arco', icon: ShieldCheck, label: 'Solicitudes ARCO' },
 ]
 
 /**
@@ -154,6 +174,7 @@ function PlatformApp() {
               }
             >
               <Route index element={<SuperAdminHospitals />} />
+              <Route path="arco" element={<SuperAdminArco />} />
             </Route>
           </Routes>
         </NotifyProvider>
@@ -165,6 +186,13 @@ function PlatformApp() {
 function HospitalRoutes() {
   return (
     <Routes>
+      {/* Acceso: pantalla completa dividida (ver layouts/AuthShell.jsx), sin encabezado público. */}
+      <Route path="login" element={<Login />} />
+      <Route path="registro" element={<Register />} />
+      <Route path="recuperar-password" element={<ForgotPassword />} />
+      <Route path="restablecer-password/:token" element={<ResetPassword />} />
+      <Route path="cambiar-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
+
       <Route element={<PublicLayout />}>
         <Route index element={<Home />} />
         <Route path="doctores" element={<Doctors />} />
@@ -173,13 +201,11 @@ function HospitalRoutes() {
         <Route path="cita-confirmada" element={<AppointmentConfirmation />} />
         <Route path="cancelar-cita" element={<CancelAppointment />} />
         <Route path="cancelar-cita/:token" element={<CancelAppointment />} />
-        <Route path="login" element={<Login />} />
-        <Route path="registro" element={<Register />} />
-        <Route path="recuperar-password" element={<ForgotPassword />} />
-        <Route path="restablecer-password/:token" element={<ResetPassword />} />
-        <Route path="cambiar-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
+        <Route path="aviso-de-privacidad" element={<PrivacyNotice />} />
+        <Route path="derechos-arco" element={<ArcoRequestPage />} />
 
         <Route path="mis-citas" element={<PrivateRoute roles={['PATIENT']}><MyAppointments /></PrivateRoute>} />
+        <Route path="mis-solicitudes-arco" element={<PrivateRoute roles={['PATIENT']}><MyArcoRequests /></PrivateRoute>} />
 
         <Route path="*" element={<NotFound />} />
       </Route>
@@ -204,6 +230,7 @@ function HospitalRoutes() {
         <Route path="cobros" element={<DoctorIncome />} />
         <Route path="horario" element={<DoctorSchedule />} />
         <Route path="ausencias" element={<DoctorScheduleExceptions />} />
+        <Route path="reportes" element={<ReportsPage />} />
         {/* Nombre anterior del módulo: los enlaces guardados siguen funcionando. */}
         <Route path="excepciones" element={<Navigate to="/doctor/ausencias" replace />} />
       </Route>
@@ -223,6 +250,10 @@ function HospitalRoutes() {
         {/* El módulo de pacientes es solo del panel administrativo (/admin/pacientes). */}
         <Route path="corte" element={<ReceptionCashCut />} />
         <Route path="cobro" element={<ReceptionCharge />} />
+        {/* Solo con el permiso "Abrir expedientes" (el admin lo habilita en Roles y permisos). */}
+        <Route path="pacientes" element={<ReceptionPatients />} />
+        <Route path="pacientes/:id" element={<ReceptionPatientDetail />} />
+        <Route path="reportes" element={<ReportsPage />} />
       </Route>
 
       <Route
@@ -258,6 +289,10 @@ function HospitalRoutes() {
         <Route path="recepcionistas" element={<AdminReceptionists />} />
         <Route path="configuracion" element={<AdminHospitalConfig />} />
         <Route path="correo" element={<AdminEmailConfig />} />
+        <Route path="solicitudes-arco" element={<AdminArcoRequests />} />
+        <Route path="bitacora" element={<AdminAuditLog />} />
+        <Route path="permisos" element={<AdminPermissions />} />
+        <Route path="reportes" element={<ReportsPage />} />
       </Route>
     </Routes>
   )

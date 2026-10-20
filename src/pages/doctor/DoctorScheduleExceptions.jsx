@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { CalendarOff, Clock, Trash2 } from 'lucide-react'
+import { Badge } from '../../components/ui'
 import {
   listOwnScheduleExceptions, createOwnScheduleException, deleteOwnScheduleException,
 } from '../../api/doctorPortal'
@@ -83,7 +85,7 @@ export default function DoctorScheduleExceptions() {
     <div>
       <div className="flex items-start justify-between gap-3 flex-wrap mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Ausencias</h1>
+          <h1 className="page-title">Ausencias</h1>
           <p className="text-sm text-gray-500 mt-1">Días u horas en los que no vas a atender (vacaciones, permisos, congresos, etc.). En esos horarios no se podrán agendar citas contigo.</p>
         </div>
         <button className="btn-primary text-sm" onClick={openCreate}>+ Registrar ausencia</button>
@@ -103,34 +105,20 @@ export default function DoctorScheduleExceptions() {
         ) : (
           <div className="divide-y divide-gray-100">
             {exceptions.map((ex) => (
-              <div key={ex.id} className="flex items-center gap-4 px-5 py-4">
-                <div
-                  className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 text-lg ${
-                    ex.allDay ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
-                  }`}
-                >
-                  {ex.allDay ? '🚫' : '⏱️'}
+              <button key={ex.id} onClick={() => handleDelete(ex.id)} disabled={deletingId === ex.id} title="Toca para quitar esta ausencia"
+                className="group flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50 disabled:opacity-50">
+                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${ex.allDay ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
+                  {ex.allDay ? <CalendarOff className="h-[18px] w-[18px]" /> : <Clock className="h-[18px] w-[18px]" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 capitalize">{formatDateOnly(ex.date)}</p>
-                  <p className="text-sm text-gray-500 truncate">{ex.reason || 'Sin motivo especificado'}</p>
+                  <p className="font-semibold capitalize text-slate-900">{formatDateOnly(ex.date)}</p>
+                  <p className="truncate text-sm text-slate-500">{ex.reason || 'Sin motivo especificado'}</p>
                 </div>
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full border whitespace-nowrap ${
-                    ex.allDay ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}
-                >
-                  {ex.allDay ? 'Todo el día' : `${formatTimeOnly(ex.startTime)} – ${formatTimeOnly(ex.endTime)}`}
+                <Badge tone={ex.allDay ? 'red' : 'amber'}>{ex.allDay ? 'Todo el día' : `${formatTimeOnly(ex.startTime)} – ${formatTimeOnly(ex.endTime)}`}</Badge>
+                <span className="hidden items-center gap-1 text-xs font-medium text-slate-400 group-hover:text-rose-600 sm:flex">
+                  <Trash2 className="h-3.5 w-3.5" /> {deletingId === ex.id ? 'Quitando...' : 'Quitar'}
                 </span>
-                <button
-                  onClick={() => handleDelete(ex.id)}
-                  disabled={deletingId === ex.id}
-                  title="Eliminar ausencia"
-                  className="text-gray-400 hover:text-red-600 disabled:opacity-50 shrink-0 text-lg"
-                >
-                  {deletingId === ex.id ? '…' : '🗑️'}
-                </button>
-              </div>
+              </button>
             ))}
           </div>
         )}

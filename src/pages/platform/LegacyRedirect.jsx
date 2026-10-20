@@ -36,7 +36,7 @@ export default function LegacyRedirect() {
   return (
     <div className="container-app py-20 text-center">
       <p className="text-4xl mb-3">🔎</p>
-      <h1 className="text-xl font-bold text-gray-900 mb-2">No encontramos esta página</h1>
+      <h1 className="page-title mb-2">No encontramos esta página</h1>
       <p className="text-gray-600 text-sm">Entra desde el enlace que te compartió tu hospital o consultorio.</p>
     </div>
   )

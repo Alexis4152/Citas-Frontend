@@ -1,45 +1,60 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import {
+  ArrowLeft, ArrowRight, Building2, CalendarClock, CreditCard, Hourglass, Landmark, Lock, MapPin, Search,
+  Stethoscope, Store, Timer, Wallet,
+} from 'lucide-react'
 import { useNavigate } from '../router'
 import { getSpecialties, searchDoctors, getDoctorAvailability } from '../api/publicCatalog'
 import { bookGuestAppointment, bookOwnAppointment } from '../api/appointments'
 import { prepayByToken, prepayOwn } from '../api/payments'
 import { useAuth } from '../context/AuthContext'
 import { useNotify } from '../context/NotifyContext'
-import AvailabilityCalendar from '../components/AvailabilityCalendar'
+import SlotPicker from '../components/SlotPicker'
 import LoadingOverlay from '../components/LoadingOverlay'
 import RecommendationsNotice from '../components/RecommendationsNotice'
 import MedicalInfoFields, { EMPTY_MEDICAL_INFO, toMedicalInfoPayload } from '../components/MedicalInfoFields'
 import WizardSteps from '../components/WizardSteps'
 import CardFields from '../components/CardFields'
+import { Avatar } from '../components/ui'
+import useSlotHold, { formatCountdown, isSlotHeldError } from '../hooks/useSlotHold'
+import usePolling from '../hooks/usePolling'
+import useAvailabilityStream from '../hooks/useAvailabilityStream'
 import { EMPTY_CARD, isOnlinePaymentEnabled, tokenizeFields } from '../utils/openpay'
 import { formatMoney, hasPrice } from '../utils/money'
 import { formatDateOnly, formatTimeOnly } from '../utils/format'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../utils/phone'
+import { resolveMediaUrl } from '../utils/media'
+import { emailError, nameError, phoneError } from '../utils/validators'
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function addDaysIso(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const date = new Date(y, m - 1, d + n)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 const STEPS = ['Doctor', 'Sede', 'Horario', 'Datos', 'Pago']
 
 /**
- * Asistente de reserva de cita, mismo patrón que Checkout.jsx del proyecto de referencia
- * (step numérico, un <form> por paso con validación nativa, resumen fijo en la barra
- * lateral). Se usa tanto para el flujo público/paciente logueado (POST /appointments/guest
- * o /appointments según haya sesión) como embebido en el flujo de recepción, que en cambio
- * usa este mismo AvailabilityCalendar pero contra /reception/appointments (ver
- * pages/reception/ReceptionNewAppointment.jsx).
+ * Asistente de reserva de cita (público y paciente con cuenta). Al elegir un horario se
+ * APARTA unos minutos (ver useSlotHold / SlotHoldService): mientras la persona llena sus datos
+ * nadie más puede tomarlo -- los demás lo ven como "alguien lo está apartando" -- y si cambia
+ * de horario, se sale o vence el tiempo, vuelve a quedar libre. La disponibilidad se refresca
+ * sola cada pocos segundos para que lo que se ve sea lo que de verdad está libre.
  *
- * Puede llegar aquí "en frío" (paso 0, elegir especialidad y doctor) o ya con un doctor
- * elegido desde DoctorDetail.jsx (via router state: { doctor, date, startTime }), en cuyo
- * caso arranca en el primer paso que aún falte por resolver.
+ * Puede llegar "en frío" (paso 0) o con un doctor y horario ya elegidos desde DoctorDetail.jsx
+ * (router state: { doctor, date, startTime }).
  */
 export default function BookAppointment() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { notify } = useNotify()
+  const slotHold = useSlotHold()
 
   const initialDoctor = location.state?.doctor || null
   const initialDate = location.state?.date || null
@@ -48,6 +63,7 @@ export default function BookAppointment() {
   const [specialties, setSpecialties] = useState([])
   const [specialtyId, setSpecialtyId] = useState('')
   const [doctorsList, setDoctorsList] = useState([])
+  const [loadingDoctors, setLoadingDoctors] = useState(false)
   const [doctor, setDoctor] = useState(initialDoctor)
   const [branchId, setBranchId] = useState(
     initialDoctor?.branches?.length === 1 ? String(initialDoctor.branches[0].id) : ''
@@ -58,15 +74,15 @@ export default function BookAppointment() {
   const [loadingAvailability, setLoadingAvailability] = useState(false)
   const [selectedDate, setSelectedDate] = useState(initialDate)
   const [selectedTime, setSelectedTime] = useState(initialStartTime)
+  const [holdingKey, setHoldingKey] = useState(null)
 
   const [patient, setPatient] = useState({ firstName: '', lastName: '', phone: '', email: '' })
+  const [touched, setTouched] = useState({})
   const [reasonForVisit, setReasonForVisit] = useState('')
   const [medicalInfo, setMedicalInfo] = useState(EMPTY_MEDICAL_INFO)
   const [submitting, setSubmitting] = useState(false)
-  // Paso 5: cómo se paga. RECEPTION = al terminar la consulta; CARD/SPEI = pago anticipado con OpenPay.
   const [payChoice, setPayChoice] = useState('RECEPTION')
   const [card, setCard] = useState(EMPTY_CARD)
-  // Solo si el hospital tiene su cuenta de OpenPay; si no, se paga en recepción.
   const [onlinePayments, setOnlinePayments] = useState(false)
   useEffect(() => { isOnlinePaymentEnabled().then(setOnlinePayments) }, [])
 
@@ -74,7 +90,7 @@ export default function BookAppointment() {
     if (!initialDoctor) return 0
     if (initialDoctor.branches?.length > 1) return 1
     if (!initialDate || !initialStartTime) return 2
-    return 3
+    return 2
   }
   const [step, setStep] = useState(computeInitialStep())
 
@@ -84,45 +100,100 @@ export default function BookAppointment() {
 
   useEffect(() => {
     if (step !== 0) return
+    setLoadingDoctors(true)
     searchDoctors({ specialtyId: specialtyId || undefined, page: 0, size: 100 })
       .then((r) => setDoctorsList(r.data.data.content))
       .catch(() => {})
+      .finally(() => setLoadingDoctors(false))
   }, [step, specialtyId])
 
-  useEffect(() => {
-    if (step < 2 || !doctor) return
-    setLoadingAvailability(true)
-    getDoctorAvailability(doctor.id, fromDate, 7)
+  const loadAvailability = useCallback((quiet = false) => {
+    if (!doctor) return Promise.resolve()
+    if (!quiet) setLoadingAvailability(true)
+    return getDoctorAvailability(doctor.id, fromDate, 7, slotHold.holderKey)
       .then((r) => setDays(r.data.data))
+      .catch(() => {})
       .finally(() => setLoadingAvailability(false))
-  }, [step, doctor, fromDate])
+  }, [doctor, fromDate, slotHold.holderKey])
 
-  function handleDoctorSubmit(e) {
-    e.preventDefault()
+  useEffect(() => {
+    if (step >= 2 && doctor) loadAvailability()
+  }, [step, doctor, fromDate, loadAvailability])
+
+  // En vivo: mientras se elige horario, se ve al instante lo que otros apartan o reservan
+  // (avisos del servidor); el refresco periódico queda de respaldo por si se cae la conexión.
+  const live = useAvailabilityStream(doctor?.id, () => loadAvailability(true), step === 2)
+  usePolling(() => { if (step === 2) loadAvailability(true) }, live ? 60000 : 12000)
+
+  // Llegó con un horario elegido (desde el perfil del doctor): se aparta en cuanto hay sede.
+  useEffect(() => {
+    if (step === 2 && doctor && branchId && selectedDate && selectedTime && !slotHold.hold) {
+      tryHold(selectedDate, { startTime: selectedTime }, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, doctor, branchId])
+
+  async function tryHold(date, slot, silent = false) {
+    setHoldingKey(`${date}|${slot.startTime}`)
+    try {
+      await slotHold.acquire(doctor.id, Number(branchId), date, slot.startTime)
+      setSelectedDate(date)
+      setSelectedTime(slot.startTime)
+      return true
+    } catch (err) {
+      setSelectedDate(null)
+      setSelectedTime(null)
+      if (!silent || isSlotHeldError(err) || err.response?.status === 409) {
+        notify(err.response?.data?.message || 'No pudimos apartar ese horario', isSlotHeldError(err) ? 'warning' : 'error')
+      }
+      loadAvailability(true)
+      return false
+    } finally {
+      setHoldingKey(null)
+    }
+  }
+
+  function changeDoctor(next) {
+    if (slotHold.hold) slotHold.release()
+    setSelectedDate(null)
+    setSelectedTime(null)
+    setDoctor(next)
+  }
+
+  function handleDoctorContinue() {
     if (!doctor) return
     if (doctor.branches?.length === 1) setBranchId(String(doctor.branches[0].id))
     setStep(doctor.branches?.length > 1 ? 1 : 2)
   }
 
-  function handleBranchSubmit(e) {
-    e.preventDefault()
-    setStep(2)
-  }
-
   function handleSelectSlot(date, slot) {
-    setSelectedDate(date)
-    setSelectedTime(slot.startTime)
+    if (selectedDate === date && selectedTime === slot.startTime && slotHold.hold && !slotHold.expired) return
+    tryHold(date, slot)
   }
 
-  function handleDatetimeContinue() {
+  async function handleDatetimeContinue() {
     if (!selectedDate || !selectedTime) return
+    // Si el apartado venció mientras pensaba, se intenta de nuevo antes de seguir.
+    if (!slotHold.hold || slotHold.expired) {
+      const ok = await tryHold(selectedDate, { startTime: selectedTime })
+      if (!ok) return
+    }
     setStep(3)
   }
 
+  const dataErrors = user ? {} : {
+    firstName: nameError(patient.firstName),
+    lastName: nameError(patient.lastName),
+    phone: phoneError(patient.phone),
+    email: emailError(patient.email, false),
+  }
+  const showError = (f) => (touched[f] ? dataErrors[f] : null)
+
   function handleDataSubmit(e) {
     e.preventDefault()
-    if (!user && patient.phone.length !== 10) {
-      notify('El teléfono debe tener exactamente 10 dígitos', 'error')
+    setTouched({ firstName: true, lastName: true, phone: true, email: true })
+    if (Object.values(dataErrors).some(Boolean)) {
+      notify('Revisa los datos marcados en rojo', 'error')
       return
     }
     setStep(4)
@@ -134,24 +205,29 @@ export default function BookAppointment() {
     e.preventDefault()
     setSubmitting(true)
     try {
-      // La tarjeta se valida y tokeniza ANTES de agendar: un dato mal capturado no deja una cita
-      // creada a medias (el token se genera directo con OpenPay, la tarjeta no pasa por el backend).
       const cardToken = priced && payChoice === 'CARD' ? await tokenizeFields(card) : null
       const basePayload = {
         doctorId: doctor.id,
         branchId: Number(branchId),
         appointmentDate: selectedDate,
         startTime: selectedTime,
-        reasonForVisit: reasonForVisit || undefined,
+        reasonForVisit: reasonForVisit.trim() || undefined,
         medicalInfo: toMedicalInfoPayload(medicalInfo),
+        holdToken: slotHold.hold?.token,
+        holderKey: slotHold.holderKey,
       }
       const res = user
         ? await bookOwnAppointment(basePayload)
-        : await bookGuestAppointment({ ...basePayload, ...patient })
+        : await bookGuestAppointment({
+          ...basePayload,
+          firstName: patient.firstName.trim(), lastName: patient.lastName.trim(), phone: patient.phone,
+          email: patient.email.trim() || undefined,
+        })
       const appointment = res.data.data
+      slotHold.forget()
 
-      // Pago anticipado: se hace DESPUÉS de agendar (el horario ya quedó apartado). Si el cobro
-      // falla, la cita sigue en pie y se paga en recepción -- nunca se pierde el horario por una tarjeta.
+      // Pago anticipado: DESPUÉS de agendar (el horario ya es suyo). Si el cobro falla, la cita
+      // sigue en pie y se paga en recepción -- nunca se pierde el horario por una tarjeta.
       let payment = null
       let paymentError = null
       if (priced && payChoice !== 'RECEPTION') {
@@ -165,263 +241,306 @@ export default function BookAppointment() {
       }
       navigate('/cita-confirmada', { state: { appointment, payment, paymentError } })
     } catch (err) {
-      notify(err.response?.data?.message || (err.response ? 'No se pudo agendar la cita' : err.message), 'error')
+      const message = err.response?.data?.message || (err.response ? 'No se pudo agendar la cita' : err.message)
+      notify(message, isSlotHeldError(err) ? 'warning' : 'error')
+      // Se lo ganaron (o lo apartó alguien tras vencer el nuestro): de vuelta a elegir horario.
+      if (err.response?.status === 409) {
+        slotHold.forget()
+        setSelectedDate(null)
+        setSelectedTime(null)
+        setStep(2)
+      }
     } finally {
       setSubmitting(false)
     }
   }
 
   const selectedBranch = doctor?.branches?.find((b) => String(b.id) === String(branchId))
+  const holdActive = slotHold.hold && !slotHold.expired
+  const filteredDoctors = doctorsList
 
   return (
-    <div className="container-app py-6 sm:py-8">
-      <LoadingOverlay show={submitting} message="Agendando tu cita..." />
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Agendar cita</h1>
-
-      <WizardSteps steps={STEPS} currentStep={step} />
-
-      {/* Fuera del paso "Doctor" a propósito: si se llega aquí con un doctor ya elegido
-          (ej. "Agendar con este doctor" desde DoctorDetail.jsx), computeInitialStep() salta
-          directo al paso que falte -- a veces hasta "Datos" -- y ese paso nunca se muestra.
-          Puesto aquí, se ve en CUALQUIER paso en cuanto hay un doctor, sin depender de que
-          el usuario haya pasado por el selector. */}
-      {doctor && (
-        <div className="mb-6">
-          <RecommendationsNotice
-            text={doctor.specialty?.recommendations}
-            className="text-sm bg-primary-50 border border-primary-200 text-primary-800 rounded-lg px-4 py-3"
-          />
+    <div className="aurora-soft min-h-[70vh]">
+      <div className="container-app py-8 sm:py-10">
+        <LoadingOverlay show={submitting} message="Agendando tu cita..." />
+        <div className="mb-8 animate-fade-up">
+          <p className="eyebrow mb-2">Agenda en línea</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">Agenda tu cita</h1>
+          <p className="mt-2 text-slate-500">En unos pasos, sin llamadas. Los horarios que ves están libres en este momento.</p>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
-        <div className="card p-5 sm:p-6">
-          {step === 0 && (
-            <form onSubmit={handleDoctorSubmit} className="space-y-4">
-              <h2 className="font-semibold text-gray-900">Elige especialidad y doctor</h2>
-              <Field label="Especialidad">
-                <select
-                  className="input"
-                  value={specialtyId}
-                  onChange={(e) => { setSpecialtyId(e.target.value); setDoctor(null) }}
-                >
-                  <option value="">Todas</option>
-                  {specialties.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </Field>
-              <Field label="Doctor">
-                <select
-                  required
-                  className="input"
-                  value={doctor?.id || ''}
-                  onChange={(e) => setDoctor(doctorsList.find((d) => String(d.id) === e.target.value) || null)}
-                >
-                  <option value="">Selecciona...</option>
-                  {doctorsList.map((d) => (
-                    <option key={d.id} value={d.id}>Dr(a). {d.firstName} {d.lastName} — {d.specialty?.name}</option>
+        <WizardSteps steps={STEPS} currentStep={step} />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
+          <div className="card p-5 sm:p-7">
+            {step === 0 && (
+              <div className="space-y-5 animate-fade-up">
+                <StepTitle icon={Stethoscope} title="¿Con quién quieres tu cita?" subtitle="Filtra por especialidad y elige a tu doctor." />
+                <div className="flex flex-wrap gap-2">
+                  <FilterChip active={!specialtyId} onClick={() => { setSpecialtyId(''); changeDoctor(null) }}>Todas</FilterChip>
+                  {specialties.map((s) => (
+                    <FilterChip key={s.id} active={String(specialtyId) === String(s.id)} onClick={() => { setSpecialtyId(String(s.id)); changeDoctor(null) }}>
+                      {s.name}
+                    </FilterChip>
                   ))}
-                </select>
-              </Field>
-              <div className="flex justify-end pt-3 border-t border-gray-100">
-                <button type="submit" className="btn-primary">Continuar</button>
-              </div>
-            </form>
-          )}
-
-          {step === 1 && doctor && (
-            <form onSubmit={handleBranchSubmit} className="space-y-4">
-              <h2 className="font-semibold text-gray-900">Elige la sede</h2>
-              <div className="space-y-2">
-                {doctor.branches.map((b) => {
-                  const selected = String(branchId) === String(b.id)
-                  return (
-                    <label
-                      key={b.id}
-                      className={`flex items-start gap-2 border rounded-lg p-3 cursor-pointer text-sm transition-colors ${
-                        selected ? 'border-primary-400 bg-primary-50 ring-1 ring-primary-200' : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="branch"
-                        required
-                        className="accent-primary-600 mt-0.5"
-                        checked={selected}
-                        onChange={() => setBranchId(String(b.id))}
-                      />
-                      <span>
-                        <span className="font-medium text-gray-900">{b.name}</span>
-                        <span className="text-gray-500"> — {b.address}, {b.city}</span>
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
-              <div className="flex justify-between pt-3 border-t border-gray-100">
-                <button type="button" onClick={() => setStep(0)} className="btn-secondary">Atrás</button>
-                <button type="submit" className="btn-primary" disabled={!branchId}>Continuar</button>
-              </div>
-            </form>
-          )}
-
-          {step === 2 && doctor && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2 className="font-semibold text-gray-900">Elige fecha y horario</h2>
-                <label className="text-sm flex items-center gap-2">
-                  <span className="text-gray-600">Desde</span>
-                  <input
-                    type="date"
-                    className="input !w-auto py-1"
-                    value={fromDate}
-                    min={todayIso()}
-                    onChange={(e) => setFromDate(e.target.value)}
-                  />
-                </label>
-              </div>
-              <AvailabilityCalendar
-                days={days}
-                mode="selectable"
-                loading={loadingAvailability}
-                selected={selectedDate && selectedTime ? { date: selectedDate, startTime: selectedTime } : null}
-                onSelectSlot={handleSelectSlot}
-              />
-              <div className="flex justify-between pt-3 border-t border-gray-100">
-                <button type="button" onClick={() => setStep(doctor.branches?.length > 1 ? 1 : 0)} className="btn-secondary">Atrás</button>
-                <button type="button" onClick={handleDatetimeContinue} className="btn-primary" disabled={!selectedDate || !selectedTime}>
-                  Continuar
-                </button>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <form onSubmit={handleDataSubmit} className="space-y-4">
-              <h2 className="font-semibold text-gray-900">
-                {user ? 'Información médica y motivo de la consulta' : 'Tus datos de contacto e información médica'}
-              </h2>
-              {!user && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Nombre">
-                    <input required className="input" value={patient.firstName}
-                      onChange={(e) => setPatient({ ...patient, firstName: e.target.value })} />
-                  </Field>
-                  <Field label="Apellido">
-                    <input required className="input" value={patient.lastName}
-                      onChange={(e) => setPatient({ ...patient, lastName: e.target.value })} />
-                  </Field>
-                  <Field label="Teléfono">
-                    <input required className="input" {...PHONE_INPUT_PROPS} value={patient.phone}
-                      onChange={(e) => setPatient({ ...patient, phone: onlyDigits(e.target.value) })} />
-                  </Field>
-                  <Field label="Correo electrónico (opcional)">
-                    <input type="email" className="input" value={patient.email}
-                      onChange={(e) => setPatient({ ...patient, email: e.target.value })} />
-                  </Field>
                 </div>
-              )}
-              {/* Obligatorio sea invitado o paciente con cuenta: el doctor lo necesita para
-                  poder recetar con seguridad (ver MedicalInfoFields.jsx). */}
-              <MedicalInfoFields value={medicalInfo} onChange={setMedicalInfo} idPrefix="book" />
-              <Field label="Motivo de la consulta (opcional)">
-                <textarea className="input" rows={3} value={reasonForVisit} onChange={(e) => setReasonForVisit(e.target.value)} />
-              </Field>
-              <div className="flex justify-between pt-3 border-t border-gray-100">
-                <button type="button" onClick={() => setStep(2)} className="btn-secondary">Atrás</button>
-                <button type="submit" className="btn-primary">Continuar</button>
-              </div>
-            </form>
-          )}
-
-          {step === 4 && (
-            <form onSubmit={handleFinalSubmit} className="space-y-4">
-              <h2 className="font-semibold text-gray-900">Pago de la consulta</h2>
-
-              {priced ? (
-                <>
-                  <div className="bg-primary-50 border border-primary-200 rounded-xl px-4 py-3 flex items-center justify-between">
-                    <span className="text-sm text-primary-800">Precio de la consulta</span>
-                    <span className="text-2xl font-black text-primary-800">{formatMoney(doctor.consultationPrice)}</span>
+                {loadingDoctors ? (
+                  <div className="grid gap-3 sm:grid-cols-2">{Array.from({ length: 4 }, (_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)}</div>
+                ) : filteredDoctors.length === 0 ? (
+                  <div className="flex flex-col items-center rounded-2xl bg-slate-50 py-10 text-center ring-1 ring-inset ring-slate-200">
+                    <Search className="mb-2 h-6 w-6 text-slate-400" />
+                    <p className="text-sm text-slate-600">No hay doctores en esta especialidad.</p>
                   </div>
-                  <p className="text-sm text-gray-600">¿Cómo prefieres pagar?</p>
-                  <div className="space-y-2">
-                    {[
-                      { value: 'RECEPTION', title: 'Pagar en recepción', hint: 'Pagas al terminar tu consulta, en efectivo o con tarjeta.' },
-                      { value: 'CARD', title: 'Pago anticipado con tarjeta', hint: 'Cobro inmediato y seguro con OpenPay.' },
-                      { value: 'SPEI', title: 'Pago anticipado por transferencia (SPEI)', hint: 'Te mostramos la CLABE al confirmar; tu cita se marca pagada al acreditarse.' },
-                    ].filter((o) => onlinePayments || o.value === 'RECEPTION').map((o) => (
-                      <label
-                        key={o.value}
-                        className={`flex items-start gap-2 border rounded-lg p-3 cursor-pointer text-sm transition-colors ${
-                          payChoice === o.value ? 'border-primary-400 bg-primary-50 ring-1 ring-primary-200' : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <input type="radio" name="payChoice" className="accent-primary-600 mt-0.5" checked={payChoice === o.value}
-                          onChange={() => setPayChoice(o.value)} disabled={submitting} />
+                ) : (
+                  <div className="grid max-h-[460px] gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+                    {filteredDoctors.map((d) => {
+                      const active = doctor?.id === d.id
+                      return (
+                        <button key={d.id} type="button" onClick={() => changeDoctor(d)}
+                          className={`flex items-center gap-3 rounded-2xl p-3.5 text-left transition ${active ? 'bg-primary-50 ring-2 ring-primary-500' : 'bg-white ring-1 ring-slate-200 hover:ring-primary-300'}`}>
+                          <Avatar first={d.firstName} last={d.lastName} src={d.photoUrl ? resolveMediaUrl(d.photoUrl) : null} size="h-12 w-12 text-sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold text-slate-900">Dr(a). {d.firstName} {d.lastName}</p>
+                            <p className="truncate text-xs font-medium text-primary-700">{d.specialty?.name}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">
+                              {hasPrice(d.consultationPrice) ? formatMoney(d.consultationPrice) : 'Precio en recepción'} · {d.branches?.map((b) => b.name).join(', ')}
+                            </p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                <StepNav onNext={handleDoctorContinue} nextDisabled={!doctor} />
+              </div>
+            )}
+
+            {step === 1 && doctor && (
+              <form onSubmit={(e) => { e.preventDefault(); setStep(2) }} className="space-y-5 animate-fade-up">
+                <StepTitle icon={Building2} title="¿En qué sede?" subtitle={`Dr(a). ${doctor.firstName} ${doctor.lastName} atiende en varias.`} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {doctor.branches.map((b) => {
+                    const active = String(branchId) === String(b.id)
+                    return (
+                      <label key={b.id} className={`flex cursor-pointer items-start gap-3 rounded-2xl p-4 transition ${active ? 'bg-primary-50 ring-2 ring-primary-500' : 'bg-white ring-1 ring-slate-200 hover:ring-primary-300'}`}>
+                        <input type="radio" name="branch" required className="mt-1 accent-primary-600" checked={active} onChange={() => setBranchId(String(b.id))} />
                         <span>
-                          <span className="font-medium text-gray-900 block">{o.title}</span>
-                          <span className="text-gray-500 text-xs">{o.hint}</span>
+                          <span className="block font-semibold text-slate-900">{b.name}</span>
+                          <span className="mt-0.5 flex items-center gap-1 text-xs text-slate-500"><MapPin className="h-3.5 w-3.5" /> {b.address}{b.city ? `, ${b.city}` : ''}</span>
                         </span>
                       </label>
-                    ))}
-                  </div>
-                  {payChoice === 'CARD' && <CardFields value={card} onChange={setCard} disabled={submitting} />}
-                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                    Si cancelas una cita pagada con al menos 1 hora de anticipación, te reembolsamos el pago. Si cancelas con menos
-                    de 1 hora, el reembolso queda a consideración del administrador del hospital.
-                  </p>
-                </>
-              ) : (
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-lg px-4 py-3">
-                  El precio de la consulta se confirma en recepción, donde podrás pagar al terminar tu cita.
+                    )
+                  })}
                 </div>
-              )}
+                <StepNav onBack={() => setStep(0)} submit nextDisabled={!branchId} />
+              </form>
+            )}
 
-              <div className="flex justify-between pt-3 border-t border-gray-100">
-                <button type="button" onClick={() => setStep(3)} className="btn-secondary" disabled={submitting}>Atrás</button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? 'Procesando...' : payChoice === 'RECEPTION' || !priced ? 'Confirmar cita' : 'Confirmar y pagar'}
-                </button>
+            {step === 2 && doctor && (
+              <div className="space-y-5 animate-fade-up">
+                <StepTitle icon={CalendarClock} title="Elige día y hora" subtitle="Al elegir un horario te lo apartamos unos minutos mientras terminas." />
+                <SlotPicker
+                  days={days}
+                  loading={loadingAvailability}
+                  live={live}
+                  selected={selectedDate && selectedTime ? { date: selectedDate, startTime: selectedTime } : null}
+                  onSelect={handleSelectSlot}
+                  busyTime={holdingKey}
+                  canGoBack={fromDate > todayIso()}
+                  onPrevWeek={() => setFromDate((d) => { const prev = addDaysIso(d, -7); return prev < todayIso() ? todayIso() : prev })}
+                  onNextWeek={() => setFromDate((d) => addDaysIso(d, 7))}
+                />
+                {holdActive && <HoldBanner hold={slotHold.hold} secondsLeft={slotHold.secondsLeft} />}
+                {slotHold.expired && (
+                  <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/20">
+                    Tu apartado venció. Si nadie más tomó el horario, al continuar te lo volvemos a apartar.
+                  </p>
+                )}
+                <StepNav onBack={() => { slotHold.release(); setSelectedDate(null); setSelectedTime(null); setStep(doctor.branches?.length > 1 ? 1 : 0) }}
+                  onNext={handleDatetimeContinue} nextDisabled={!selectedDate || !selectedTime || Boolean(holdingKey)} />
               </div>
-            </form>
-          )}
-        </div>
+            )}
 
-        <aside className="card p-5 h-fit lg:sticky lg:top-24">
-          <h2 className="font-semibold text-gray-900 mb-4">Resumen</h2>
-          <ul className="space-y-2 text-sm text-gray-600">
-            <li>
-              <span className="block text-gray-400 text-xs">Doctor</span>
-              {doctor ? `Dr(a). ${doctor.firstName} ${doctor.lastName}` : '—'}
-            </li>
-            <li>
-              <span className="block text-gray-400 text-xs">Especialidad</span>
-              {doctor?.specialty?.name || '—'}
-            </li>
-            <li>
-              <span className="block text-gray-400 text-xs">Sede</span>
-              {selectedBranch?.name || '—'}
-            </li>
-            <li>
-              <span className="block text-gray-400 text-xs">Fecha y hora</span>
-              {selectedDate && selectedTime ? `${formatDateOnly(selectedDate)}, ${formatTimeOnly(selectedTime)}` : '—'}
-            </li>
-            <li>
-              <span className="block text-gray-400 text-xs">Precio de la consulta</span>
-              {doctor ? (priced ? formatMoney(doctor.consultationPrice) : 'Por confirmar en recepción') : '—'}
-            </li>
-          </ul>
-        </aside>
+            {step === 3 && (
+              <form onSubmit={handleDataSubmit} className="space-y-5 animate-fade-up" noValidate>
+                <StepTitle icon={Hourglass} title={user ? 'Información para tu doctor' : 'Tus datos'}
+                  subtitle={user ? 'Se actualiza en cada cita para que tu doctor tenga lo más reciente.' : 'Te mandamos la confirmación y el enlace para gestionar tu cita.'} />
+                {!user && (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <TextField label="Nombre" value={patient.firstName} error={showError('firstName')} autoComplete="given-name"
+                      onBlur={() => setTouched((t) => ({ ...t, firstName: true }))} onChange={(v) => setPatient({ ...patient, firstName: v })} />
+                    <TextField label="Apellido" value={patient.lastName} error={showError('lastName')} autoComplete="family-name"
+                      onBlur={() => setTouched((t) => ({ ...t, lastName: true }))} onChange={(v) => setPatient({ ...patient, lastName: v })} />
+                    <TextField label="Teléfono" value={patient.phone} error={showError('phone')} inputProps={PHONE_INPUT_PROPS}
+                      onBlur={() => setTouched((t) => ({ ...t, phone: true }))} onChange={(v) => setPatient({ ...patient, phone: onlyDigits(v) })} />
+                    <TextField label="Correo electrónico (opcional)" type="email" value={patient.email} error={showError('email')} autoComplete="email"
+                      hint="Para mandarte la confirmación y el enlace de tu cita."
+                      onBlur={() => setTouched((t) => ({ ...t, email: true }))} onChange={(v) => setPatient({ ...patient, email: v })} />
+                  </div>
+                )}
+                <MedicalInfoFields value={medicalInfo} onChange={setMedicalInfo} idPrefix="book" />
+                <div>
+                  <label className="label" htmlFor="book-reason">Motivo de la consulta <span className="font-normal text-slate-400">(opcional)</span></label>
+                  <textarea id="book-reason" className="input" rows={3} maxLength={1000} value={reasonForVisit} onChange={(e) => setReasonForVisit(e.target.value)}
+                    placeholder="Ej. dolor de cabeza frecuente desde hace una semana" />
+                  <p className="field-hint text-right">{reasonForVisit.length}/1000</p>
+                </div>
+                <StepNav onBack={() => setStep(2)} submit />
+              </form>
+            )}
+
+            {step === 4 && (
+              <form onSubmit={handleFinalSubmit} className="space-y-5 animate-fade-up">
+                <StepTitle icon={Wallet} title="¿Cómo quieres pagar?" />
+                {priced ? (
+                  <>
+                    <div className="flex items-center justify-between rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 px-5 py-4 text-white shadow-glow">
+                      <span className="text-sm text-white/80">Precio de la consulta</span>
+                      <span className="font-display text-3xl font-semibold">{formatMoney(doctor.consultationPrice)}</span>
+                    </div>
+                    <div className="grid gap-3">
+                      {[
+                        { value: 'RECEPTION', icon: Store, title: 'Pagar en recepción', hint: 'Al terminar tu consulta, en efectivo o con tarjeta.' },
+                        { value: 'CARD', icon: CreditCard, title: 'Pago anticipado con tarjeta', hint: 'Cobro inmediato y seguro con OpenPay.' },
+                        { value: 'SPEI', icon: Landmark, title: 'Transferencia (SPEI)', hint: 'Te mostramos la CLABE al confirmar; se marca pagada al acreditarse.' },
+                      ].filter((o) => onlinePayments || o.value === 'RECEPTION').map((o) => {
+                        const active = payChoice === o.value
+                        return (
+                          <label key={o.value} className={`flex cursor-pointer items-start gap-3 rounded-2xl p-4 transition ${active ? 'bg-primary-50 ring-2 ring-primary-500' : 'bg-white ring-1 ring-slate-200 hover:ring-primary-300'}`}>
+                            <input type="radio" name="payChoice" className="sr-only" checked={active} onChange={() => setPayChoice(o.value)} disabled={submitting} />
+                            <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${active ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-500'}`}><o.icon className="h-5 w-5" /></span>
+                            <span>
+                              <span className="block font-semibold text-slate-900">{o.title}</span>
+                              <span className="text-xs text-slate-500">{o.hint}</span>
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                    {payChoice === 'CARD' && <CardFields value={card} onChange={setCard} disabled={submitting} />}
+                    <p className="flex items-start gap-2 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-600 ring-1 ring-inset ring-slate-200">
+                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      Si cancelas una cita pagada con al menos 1 hora de anticipación, te reembolsamos el pago. Con menos de 1 hora, el reembolso queda a consideración del hospital.
+                    </p>
+                  </>
+                ) : (
+                  <div className="rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-900 ring-1 ring-inset ring-amber-600/20">
+                    El precio de la consulta se confirma en recepción, donde podrás pagar al terminar tu cita.
+                  </div>
+                )}
+                <StepNav onBack={() => setStep(3)} submit disabled={submitting}
+                  nextLabel={submitting ? 'Procesando...' : payChoice === 'RECEPTION' || !priced ? 'Confirmar cita' : 'Confirmar y pagar'} />
+              </form>
+            )}
+          </div>
+
+          <aside className="h-fit space-y-4 lg:sticky lg:top-24">
+            <div className="card overflow-hidden">
+              <div className="bg-gradient-to-br from-ink-900 to-ink-800 p-5 text-white">
+                <p className="text-xs font-semibold uppercase tracking-[.16em] text-white/50">Tu cita</p>
+                {doctor ? (
+                  <div className="mt-3 flex items-center gap-3">
+                    <Avatar first={doctor.firstName} last={doctor.lastName} src={doctor.photoUrl ? resolveMediaUrl(doctor.photoUrl) : null} size="h-12 w-12 text-sm" />
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">Dr(a). {doctor.firstName} {doctor.lastName}</p>
+                      <p className="truncate text-xs text-primary-200">{doctor.specialty?.name}</p>
+                    </div>
+                  </div>
+                ) : <p className="mt-3 text-sm text-white/60">Elige un doctor para empezar.</p>}
+              </div>
+              <dl className="divide-y divide-slate-100 text-sm">
+                <SummaryRow icon={Building2} label="Sede" value={selectedBranch?.name} />
+                <SummaryRow icon={CalendarClock} label="Fecha y hora"
+                  value={selectedDate && selectedTime ? `${formatDateOnly(selectedDate)}, ${formatTimeOnly(selectedTime)}` : null} />
+                <SummaryRow icon={Wallet} label="Consulta"
+                  value={doctor ? (priced ? formatMoney(doctor.consultationPrice) : 'Por confirmar en recepción') : null} />
+              </dl>
+              {holdActive && step > 2 && (
+                <div className="border-t border-slate-100 p-4"><HoldBanner hold={slotHold.hold} secondsLeft={slotHold.secondsLeft} compact /></div>
+              )}
+            </div>
+            {doctor && (
+              <div className="card p-5 text-sm text-slate-600">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Antes de tu cita</p>
+                <RecommendationsNotice text={doctor.specialty?.recommendations} className="space-y-1" />
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </div>
   )
 }
 
-function Field({ label, children, className = '' }) {
+function HoldBanner({ secondsLeft, compact }) {
+  const low = secondsLeft <= 60
   return (
-    <label className={`block text-sm ${className}`}>
-      <span className="block text-gray-700 mb-1 font-medium">{label}</span>
+    <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ring-1 ring-inset ${low ? 'bg-amber-50 text-amber-900 ring-amber-600/25' : 'bg-emerald-50 text-emerald-900 ring-emerald-600/20'}`}>
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${low ? 'bg-amber-500 text-white animate-pulse-ring' : 'bg-emerald-500 text-white'}`}>
+        <Timer className="h-[18px] w-[18px]" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold">Horario apartado para ti</p>
+        {!compact && <p className="text-xs opacity-80">Nadie más puede tomarlo mientras terminas.</p>}
+      </div>
+      <span className="font-mono text-lg font-semibold tabular-nums">{formatCountdown(secondsLeft)}</span>
+    </div>
+  )
+}
+
+function StepTitle({ icon: Icon, title, subtitle }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-600 ring-1 ring-primary-100"><Icon className="h-5 w-5" /></div>
+      <div>
+        <h2 className="font-display text-xl font-semibold text-slate-900">{title}</h2>
+        {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
+      </div>
+    </div>
+  )
+}
+
+function StepNav({ onBack, onNext, nextDisabled, submit, disabled, nextLabel = 'Continuar' }) {
+  return (
+    <div className="flex items-center justify-between border-t border-slate-100 pt-5">
+      {onBack ? (
+        <button type="button" onClick={onBack} className="btn-ghost" disabled={disabled}><ArrowLeft className="h-4 w-4" /> Atrás</button>
+      ) : <span />}
+      <button type={submit ? 'submit' : 'button'} onClick={submit ? undefined : onNext} className="btn-primary" disabled={nextDisabled || disabled}>
+        {nextLabel} {nextLabel === 'Continuar' && <ArrowRight className="h-4 w-4" />}
+      </button>
+    </div>
+  )
+}
+
+function FilterChip({ active, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${active ? 'bg-primary-600 text-white shadow-sm' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-primary-300'}`}>
       {children}
-    </label>
+    </button>
+  )
+}
+
+function SummaryRow({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-start gap-3 px-5 py-3.5">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+      <div className="min-w-0">
+        <dt className="text-xs text-slate-400">{label}</dt>
+        <dd className={`truncate ${value ? 'font-medium text-slate-800' : 'text-slate-400'}`}>{value || '—'}</dd>
+      </div>
+    </div>
+  )
+}
+
+function TextField({ label, value, onChange, onBlur, error, hint, type = 'text', inputProps = {}, autoComplete }) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <input type={type} autoComplete={autoComplete} className={`input ${error ? 'input-error' : ''}`} value={value}
+        onChange={(e) => onChange(e.target.value)} onBlur={onBlur} {...inputProps} />
+      {error ? <p className="field-error">{error}</p> : hint ? <p className="field-hint">{hint}</p> : null}
+    </div>
   )
 }

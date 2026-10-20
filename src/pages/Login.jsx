@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { ArrowRight, Mail, ShieldCheck } from 'lucide-react'
 import { Link, useNavigate } from '../router'
 import { useAuth } from '../context/AuthContext'
 import PasswordInput from '../components/PasswordInput'
+import AuthShell, { FormAlert } from '../layouts/AuthShell'
 import { getHospitalSlug } from '../tenant'
 
 const HOME_BY_ROLE = { SUPER_ADMIN: '/superadmin', ADMIN: '/admin', RECEPTIONIST: '/recepcion', DOCTOR: '/doctor', PATIENT: '/' }
@@ -22,7 +24,7 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const userData = await login(email, password)
+      const userData = await login(email.trim(), password)
       navigate(location.state?.from || HOME_BY_ROLE[userData.role] || '/')
     } catch (err) {
       setError(err.response?.data?.message || 'No pudimos iniciar tu sesión')
@@ -32,41 +34,44 @@ export default function Login() {
   }
 
   return (
-    <div className="container-app py-12 sm:py-20 flex justify-center">
-      <div className="w-full max-w-sm card p-6 sm:p-8">
-        <h1 className="text-xl font-bold text-gray-900 mb-1">Iniciar sesión</h1>
-        <p className="text-sm text-gray-500 mb-6">
-          {inHospital
-            ? 'Ingresa a tu cuenta para agendar y ver tus citas.'
-            : 'Acceso de administración de la plataforma. Si eres paciente o personal de un hospital, entra desde el enlace de tu hospital.'}
-        </p>
-
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="block text-sm">
-            <span className="block text-gray-700 mb-1 font-medium">Correo electrónico</span>
-            <input required type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </label>
-          <label className="block text-sm">
-            <span className="block text-gray-700 mb-1 font-medium">Contraseña</span>
-            <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} />
-          </label>
-          <div className="text-right -mt-2">
-            <Link to="/recuperar-password" className="text-xs text-primary-700 hover:underline">¿Olvidaste tu contraseña?</Link>
-          </div>
-          <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? 'Ingresando...' : 'Iniciar sesión'}
-          </button>
-        </form>
-
-        {/* Las cuentas de paciente son por hospital: en la raíz (super admin) no hay registro. */}
-        {inHospital && (
-          <p className="text-sm text-gray-500 mt-6 text-center">
-            ¿No tienes cuenta? <Link to="/registro" className="text-primary-700 font-medium hover:underline">Regístrate</Link>
+    <AuthShell
+      eyebrow={inHospital ? 'Bienvenido de vuelta' : 'Nexora'}
+      title="Inicia sesión"
+      subtitle={inHospital
+        ? 'Pacientes y personal del hospital entran aquí.'
+        : 'Acceso de administración de la plataforma. Si eres paciente o personal, entra desde el enlace de tu hospital.'}
+      footer={inHospital ? (
+        <div className="space-y-3">
+          <p>¿No tienes cuenta? <Link to="/registro" className="font-semibold text-primary-700 hover:underline">Regístrate gratis</Link></p>
+          <p className="text-xs">
+            <Link to="/derechos-arco" className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-600">
+              <ShieldCheck className="h-3.5 w-3.5" /> Derechos ARCO sobre tus datos personales
+            </Link>
           </p>
-        )}
-      </div>
-    </div>
+        </div>
+      ) : null}
+    >
+      {error && <FormAlert>{error}</FormAlert>}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label" htmlFor="login-email">Correo electrónico</label>
+          <div className="relative">
+            <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input id="login-email" required type="email" autoComplete="email" className="input pl-10" placeholder="tucorreo@ejemplo.com"
+              value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+        </div>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="label mb-0" htmlFor="login-password">Contraseña</label>
+            <Link to="/recuperar-password" className="text-xs font-medium text-primary-700 hover:underline">¿La olvidaste?</Link>
+          </div>
+          <PasswordInput id="login-password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
+        <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+          {loading ? 'Ingresando...' : <>Entrar <ArrowRight className="h-4 w-4" /></>}
+        </button>
+      </form>
+    </AuthShell>
   )
 }

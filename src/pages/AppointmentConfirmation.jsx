@@ -37,7 +37,7 @@ export default function AppointmentConfirmation() {
     <div className="container-app py-8 sm:py-12">
       <div className="max-w-2xl mx-auto text-center mb-8">
         <p className="text-5xl mb-3">✅</p>
-        <h1 className="text-2xl font-bold text-gray-900">¡Cita agendada!</h1>
+        <h1 className="page-title">¡Cita agendada!</h1>
         {appointment && <p className="text-gray-600 mt-1">Folio de cita: <span className="font-semibold">#{appointment.id}</span></p>}
       </div>
 

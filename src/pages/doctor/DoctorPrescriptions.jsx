@@ -6,6 +6,8 @@ import { downloadBlob } from '../../utils/media'
 import AdminPagination from '../../components/AdminPagination'
 import PrescriptionViewModal from '../../components/PrescriptionViewModal'
 import useDebouncedValue from '../../hooks/useDebouncedValue'
+import { ChevronRight, FileText } from 'lucide-react'
+import { Badge, EmptyState, Skeleton } from '../../components/ui'
 
 /**
  * Módulo "Recetas" del doctor: arriba, la plantilla base que se precarga al generar una
@@ -71,7 +73,7 @@ export default function DoctorPrescriptions() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Recetas</h1>
+      <h1 className="page-title mb-6">Recetas</h1>
 
       <div className="card p-6 mb-6">
         <h2 className="font-semibold text-gray-900 mb-1">Mi plantilla de receta</h2>
@@ -107,67 +109,28 @@ export default function DoctorPrescriptions() {
         </div>
 
         {loadingList ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : result.content.length === 0 ? (
+          <EmptyState icon={FileText} title="Sin recetas" description="Las recetas que generes en tus consultas aparecen aquí." />
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Paciente</th>
-                    <th className="px-4 py-3 font-medium">Cita</th>
-                    <th className="px-4 py-3 font-medium">Emitida</th>
-                    <th className="px-4 py-3 font-medium">Indicaciones</th>
-                    <th className="px-4 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.content.map((p) => (
-                    <tr key={p.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3 font-medium text-gray-900">{p.patientName}</td>
-                      <td className="px-4 py-3 text-gray-600 capitalize">{formatDateOnly(p.appointmentDate)}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(p.createdAt)}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate cursor-pointer hover:text-gray-900" title="Ver receta completa" onClick={() => setViewing(p)}>{p.content}</td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap space-x-3">
-                        <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => setViewing(p)}>
-                          Ver
-                        </button>
-                        <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => handleDownload(p.id)}>
-                          Descargar PDF
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {result.content.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin recetas</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-gray-100">
-              {result.content.map((p) => (
-                <div key={p.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium text-gray-900">{p.patientName}</p>
-                    <div className="shrink-0 space-x-3">
-                      <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => setViewing(p)}>
-                        Ver
-                      </button>
-                      <button className="text-primary-700 text-xs font-medium hover:underline" onClick={() => handleDownload(p.id)}>
-                        Descargar PDF
-                      </button>
-                    </div>
+          <ul className="divide-y divide-slate-100">
+            {result.content.map((p) => (
+              <li key={p.id}>
+                <button onClick={() => setViewing(p)} className="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-slate-50">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-600"><FileText className="h-[18px] w-[18px]" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">{p.patientName}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      <span className="capitalize">Cita del {formatDateOnly(p.appointmentDate)}</span> · {p.diagnosis || p.content}
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5 capitalize">Cita: {formatDateOnly(p.appointmentDate)} · Emitida: {formatDate(p.createdAt)}</p>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2" onClick={() => setViewing(p)}>{p.content}</p>
-                </div>
-              ))}
-              {result.content.length === 0 && (
-                <p className="px-4 py-8 text-center text-gray-400 text-sm">Sin recetas</p>
-              )}
-            </div>
-          </>
+                  {p.voided && <Badge tone="red">Anulada</Badge>}
+                  <span className="hidden text-xs text-slate-400 md:block">{formatDate(p.createdAt)}</span>
+                  <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         <AdminPagination
           page={result.page} size={size} totalPages={result.totalPages} totalElements={result.totalElements}

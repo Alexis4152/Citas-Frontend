@@ -4,6 +4,8 @@ import { useNotify } from '../../context/NotifyContext'
 import Modal from '../../components/Modal'
 import AdminPagination from '../../components/AdminPagination'
 import useDebouncedValue from '../../hooks/useDebouncedValue'
+import { ChevronRight, Plus, Search, Stethoscope } from 'lucide-react'
+import { Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui'
 
 const EMPTY = { name: '', description: '', recommendations: '' }
 
@@ -16,10 +18,10 @@ export default function AdminSpecialties() {
   const [result, setResult] = useState({ content: [], page: 0, totalPages: 0, totalElements: 0 })
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(EMPTY)
-  const [editingId, setEditingId] = useState(null)
+  const [editing, setEditing] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [deactivatingId, setDeactivatingId] = useState(null)
+  const [deactivating, setDeactivating] = useState(false)
 
   function load() {
     setLoading(true)
@@ -31,19 +33,14 @@ export default function AdminSpecialties() {
   useEffect(() => { load() }, [page, size, debouncedQuery])
   useEffect(() => { setPage(0) }, [debouncedQuery])
 
-  function handleClearSearch() {
-    setQuery('')
-    setPage(0)
-  }
-
   function openCreate() {
-    setEditingId(null)
+    setEditing(null)
     setForm(EMPTY)
     setModalOpen(true)
   }
 
   function openEdit(s) {
-    setEditingId(s.id)
+    setEditing(s)
     setForm({ name: s.name, description: s.description || '', recommendations: s.recommendations || '' })
     setModalOpen(true)
   }
@@ -52,8 +49,8 @@ export default function AdminSpecialties() {
     e.preventDefault()
     setSaving(true)
     try {
-      if (editingId) {
-        await adminUpdateSpecialty(editingId, form)
+      if (editing) {
+        await adminUpdateSpecialty(editing.id, form)
         notify('Especialidad actualizada', 'success')
       } else {
         await adminCreateSpecialty(form)
@@ -68,100 +65,55 @@ export default function AdminSpecialties() {
     }
   }
 
-  async function handleDeactivate(id, name) {
-    const ok = await confirmDialog(`¿Desactivar "${name}"?`, { confirmText: 'Desactivar' })
+  async function handleDeactivate() {
+    const ok = await confirmDialog(`¿Desactivar "${editing.name}"? Ya no aparecerá al agendar citas.`, { confirmText: 'Desactivar' })
     if (!ok) return
-    setDeactivatingId(id)
+    setDeactivating(true)
     try {
-      await adminDeactivateSpecialty(id)
+      await adminDeactivateSpecialty(editing.id)
       notify('Especialidad desactivada', 'success')
+      setModalOpen(false)
       load()
     } catch (err) {
       notify(err.response?.data?.message || 'No se pudo desactivar', 'error')
     } finally {
-      setDeactivatingId(null)
+      setDeactivating(false)
     }
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Especialidades</h1>
-        <button className="btn-primary text-sm" onClick={openCreate}>+ Agregar especialidad</button>
-      </div>
+      <PageHeader icon={Stethoscope} eyebrow="Catálogo" title="Especialidades" description="Toca una especialidad para editarla o ver sus recomendaciones."
+        actions={<button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> Agregar especialidad</button>} />
 
-      <div className="card p-4 mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[220px]">
-          <label className="text-xs font-medium text-gray-600 block mb-1">Nombre o descripción</label>
-          <input className="input" placeholder="Buscar..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      <div className="card mb-4 p-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input className="input pl-10" placeholder="Buscar por nombre o descripción" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        {query && (
-          <button type="button" className="btn-secondary text-sm" onClick={handleClearSearch}>
-            Limpiar
-          </button>
-        )}
       </div>
 
-      <div className="card p-0 overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : result.content.length === 0 ? (
+          <EmptyState icon={Stethoscope} title="Sin especialidades" description="Agrega la primera especialidad." />
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Nombre</th>
-                    <th className="px-4 py-3 font-medium">Descripción</th>
-                    <th className="px-4 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.content.map((s) => (
-                    <tr key={s.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
-                      <td className="px-4 py-3 text-gray-600">{s.description}</td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => openEdit(s)} className="text-primary-700 hover:underline mr-3">Editar</button>
-                        <button
-                          onClick={() => handleDeactivate(s.id, s.name)}
-                          disabled={deactivatingId === s.id}
-                          className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                        >
-                          {deactivatingId === s.id ? 'Desactivando...' : 'Desactivar'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {result.content.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-400">Sin especialidades</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-gray-100">
-              {result.content.map((s) => (
-                <div key={s.id} className="px-4 py-3">
-                  <p className="font-medium text-gray-900">{s.name}</p>
-                  {s.description && <p className="text-sm text-gray-600 mt-0.5">{s.description}</p>}
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <button onClick={() => openEdit(s)} className="text-primary-700 hover:underline">Editar</button>
-                    <button
-                      onClick={() => handleDeactivate(s.id, s.name)}
-                      disabled={deactivatingId === s.id}
-                      className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                    >
-                      {deactivatingId === s.id ? 'Desactivando...' : 'Desactivar'}
-                    </button>
+          <ul className="divide-y divide-slate-100">
+            {result.content.map((s) => (
+              <li key={s.id}>
+                <button onClick={() => openEdit(s)} className="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-slate-50">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-600"><Stethoscope className="h-[18px] w-[18px]" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">{s.name}</p>
+                    <p className="truncate text-xs text-slate-500">{s.description || 'Sin descripción'}</p>
                   </div>
-                </div>
-              ))}
-              {result.content.length === 0 && (
-                <p className="px-4 py-8 text-center text-gray-400 text-sm">Sin especialidades</p>
-              )}
-            </div>
-          </>
+                  {s.recommendations && <Badge tone="brand" className="hidden sm:inline-flex">Con recomendaciones</Badge>}
+                  <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         <AdminPagination
           page={result.page} size={size} totalPages={result.totalPages} totalElements={result.totalElements}
@@ -171,7 +123,7 @@ export default function AdminSpecialties() {
       </div>
 
       {modalOpen && (
-        <Modal title={editingId ? 'Editar especialidad' : 'Nueva especialidad'} onClose={() => setModalOpen(false)}>
+        <Modal title={editing ? editing.name : 'Nueva especialidad'} onClose={() => setModalOpen(false)}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <label className="block text-sm">
               <span className="block text-gray-700 mb-1 font-medium">Nombre</span>
@@ -184,16 +136,21 @@ export default function AdminSpecialties() {
             <label className="block text-sm">
               <span className="block text-gray-700 mb-1 font-medium">Recomendaciones para el paciente</span>
               <textarea
-                className="input" rows={3} placeholder="Ej. Acude con la vejiga llena. Si dejas en blanco, se usa el texto genérico."
+                className="input" rows={5} placeholder={'Una por línea, por ejemplo:\nAcude con la vejiga llena\nTrae tus estudios previos'}
                 value={form.recommendations} onChange={(e) => setForm({ ...form, recommendations: e.target.value })}
               />
               <p className="text-xs text-gray-400 mt-1">
-                Aparece en la confirmación de la cita, el correo y el comprobante en PDF, en vez del texto genérico.
+                Escribe una recomendación por línea: se muestran como viñetas en la confirmación, el correo y el comprobante PDF. Si lo dejas en blanco se usa el texto genérico.
               </p>
             </label>
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+              {editing && (
+                <button type="button" className="btn-danger-ghost mr-auto" disabled={deactivating} onClick={handleDeactivate}>
+                  {deactivating ? 'Desactivando...' : 'Desactivar'}
+                </button>
+              )}
               <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
-              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear especialidad'}</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : editing ? 'Actualizar' : 'Crear especialidad'}</button>
             </div>
           </form>
         </Modal>

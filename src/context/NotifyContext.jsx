@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState } from 'react'
+import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react'
 import useEscapeKey from '../hooks/useEscapeKey'
 
 const NotifyContext = createContext(null)
@@ -6,13 +7,14 @@ const NotifyContext = createContext(null)
 let idCounter = 0
 
 const TOAST_STYLES = {
-  error: { box: 'bg-red-50 border-red-200 text-red-700', icon: '⚠️' },
-  success: { box: 'bg-green-50 border-green-200 text-green-700', icon: '✅' },
-  info: { box: 'bg-primary-50 border-primary-200 text-primary-700', icon: 'ℹ️' },
+  error: { bar: 'bg-rose-500', icon: AlertTriangle, iconClass: 'text-rose-500' },
+  success: { bar: 'bg-emerald-500', icon: CheckCircle2, iconClass: 'text-emerald-500' },
+  info: { bar: 'bg-primary-500', icon: Info, iconClass: 'text-primary-500' },
+  warning: { bar: 'bg-amber-500', icon: AlertTriangle, iconClass: 'text-amber-500' },
 }
 
-/** Reemplaza alert()/confirm() nativos por toasts y un modal de confirmación con el
- * estilo de la app, ligados al color de marca configurado por el admin. */
+/** Reemplaza alert()/confirm() nativos por avisos flotantes y un modal de confirmación con
+ * el estilo de la app. */
 export function NotifyProvider({ children }) {
   const [toasts, setToasts] = useState([])
   const [confirmState, setConfirmState] = useState(null)
@@ -24,7 +26,7 @@ export function NotifyProvider({ children }) {
   const notify = useCallback((message, type = 'error') => {
     const id = ++idCounter
     setToasts((t) => [...t, { id, message, type }])
-    setTimeout(() => dismiss(id), 4500)
+    setTimeout(() => dismiss(id), 5000)
   }, [dismiss])
 
   const confirmDialog = useCallback((message, opts = {}) => {
@@ -44,35 +46,38 @@ export function NotifyProvider({ children }) {
     <NotifyContext.Provider value={{ notify, confirmDialog }}>
       {children}
 
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm pointer-events-none">
+      <div className="pointer-events-none fixed right-4 top-4 z-[400] flex w-full max-w-sm flex-col gap-2" aria-live="polite">
         {toasts.map((t) => {
           const style = TOAST_STYLES[t.type] ?? TOAST_STYLES.error
+          const Icon = style.icon
           return (
-            <div
-              key={t.id}
-              className={`pointer-events-auto rounded-lg shadow-lg border px-4 py-3 text-sm flex items-start gap-3 animate-[toast-in_0.2s_ease-out] ${style.box}`}
-            >
-              <span className="text-base leading-none">{style.icon}</span>
-              <p className="flex-1">{t.message}</p>
-              <button className="text-current opacity-50 hover:opacity-100 leading-none" onClick={() => dismiss(t.id)}>✕</button>
+            <div key={t.id}
+              className="pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-2xl bg-white px-4 py-3.5 text-sm text-slate-700 shadow-lift ring-1 ring-slate-200 animate-slide-in-right">
+              <span className={`absolute inset-y-0 left-0 w-1 ${style.bar}`} />
+              <Icon className={`mt-0.5 h-[18px] w-[18px] shrink-0 ${style.iconClass}`} />
+              <p className="flex-1 leading-snug">{t.message}</p>
+              <button className="text-slate-400 hover:text-slate-700" onClick={() => dismiss(t.id)} aria-label="Cerrar aviso">
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )
         })}
       </div>
 
       {confirmState && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[101] p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
-            {confirmState.opts.title && <h3 className="text-lg font-bold text-gray-900 mb-2">{confirmState.opts.title}</h3>}
-            <p className="text-sm text-gray-700 mb-6">{confirmState.message}</p>
-            <div className="flex gap-2 justify-end">
+        <div className="fixed inset-0 z-[401] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm" onClick={() => handleConfirm(false)} />
+          <div className="relative w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl animate-scale-in">
+            <div className={`mb-4 grid h-11 w-11 place-items-center rounded-2xl ${confirmState.opts.danger === false ? 'bg-primary-50 text-primary-600' : 'bg-rose-50 text-rose-600'}`}>
+              {confirmState.opts.danger === false ? <Info className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+            </div>
+            {confirmState.opts.title && <h3 className="mb-1.5 font-display text-lg font-semibold text-slate-900">{confirmState.opts.title}</h3>}
+            <p className="mb-6 text-sm text-slate-600">{confirmState.message}</p>
+            <div className="flex justify-end gap-2">
               <button className="btn-secondary" onClick={() => handleConfirm(false)}>
                 {confirmState.opts.cancelText ?? 'Cancelar'}
               </button>
-              <button
-                className={confirmState.opts.danger === false ? 'btn-primary' : 'btn-danger'}
-                onClick={() => handleConfirm(true)}
-              >
+              <button className={confirmState.opts.danger === false ? 'btn-primary' : 'btn-danger'} onClick={() => handleConfirm(true)}>
                 {confirmState.opts.confirmText ?? 'Confirmar'}
               </button>
             </div>

@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { MailCheck } from 'lucide-react'
 import { Link } from '../router'
 import { forgotPassword } from '../api/auth'
+import AuthShell from '../layouts/AuthShell'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
@@ -11,41 +13,33 @@ export default function ForgotPassword() {
     e.preventDefault()
     setLoading(true)
     try {
-      await forgotPassword({ email })
+      await forgotPassword({ email: email.trim() })
     } finally {
-      // Misma respuesta exista o no la cuenta (patrón 02, anti-enumeración): el mensaje de
-      // éxito se muestra siempre, sin importar si la llamada tuvo éxito o falló.
+      // Misma respuesta exista o no la cuenta (anti-enumeración).
       setSent(true)
       setLoading(false)
     }
   }
 
   return (
-    <div className="container-app py-12 sm:py-20 flex justify-center">
-      <div className="w-full max-w-sm card p-6 sm:p-8">
-        <h1 className="text-xl font-bold text-gray-900 mb-1">Recuperar contraseña</h1>
-        <p className="text-sm text-gray-500 mb-6">Te enviaremos un enlace para restablecerla.</p>
-
-        {sent ? (
-          <p className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-3 py-2">
-            Si el correo existe, te enviamos instrucciones para recuperar tu contraseña.
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <label className="block text-sm">
-              <span className="block text-gray-700 mb-1 font-medium">Correo electrónico</span>
-              <input required type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </label>
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Enviando...' : 'Enviar enlace'}
-            </button>
-          </form>
-        )}
-
-        <p className="text-sm text-gray-500 mt-6 text-center">
-          <Link to="/login" className="text-primary-700 font-medium hover:underline">Volver a iniciar sesión</Link>
-        </p>
-      </div>
-    </div>
+    <AuthShell eyebrow="Recuperación" title="¿Olvidaste tu contraseña?" subtitle="Te mandamos un enlace para crear una nueva."
+      footer={<Link to="/login" className="font-semibold text-primary-700 hover:underline">Volver a iniciar sesión</Link>}>
+      {sent ? (
+        <div className="rounded-2xl bg-emerald-50 p-5 text-center ring-1 ring-inset ring-emerald-600/20">
+          <MailCheck className="mx-auto mb-3 h-8 w-8 text-emerald-600" />
+          <p className="text-sm text-emerald-800">Si el correo está registrado, te enviamos las instrucciones. Revisa también tu carpeta de spam.</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label" htmlFor="forgot-email">Correo electrónico</label>
+            <input id="forgot-email" required type="email" autoComplete="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+            {loading ? 'Enviando...' : 'Enviar enlace'}
+          </button>
+        </form>
+      )}
+    </AuthShell>
   )
 }

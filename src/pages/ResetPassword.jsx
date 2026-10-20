@@ -1,19 +1,26 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { CheckCircle2 } from 'lucide-react'
 import { Link, useNavigate } from '../router'
 import { resetPassword } from '../api/auth'
 import PasswordInput from '../components/PasswordInput'
+import AuthShell, { FormAlert } from '../layouts/AuthShell'
+import { passwordProblem } from '../utils/validators'
 
 export default function ResetPassword() {
   const { token } = useParams()
   const navigate = useNavigate()
   const [newPassword, setNewPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
+    const problem = passwordProblem(newPassword)
+    if (problem) return setError(problem)
+    if (newPassword !== confirm) return setError('Las contraseñas no coinciden')
     setError('')
     setLoading(true)
     try {
@@ -27,36 +34,34 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="container-app py-12 sm:py-20 flex justify-center">
-      <div className="w-full max-w-sm card p-6 sm:p-8">
-        <h1 className="text-xl font-bold text-gray-900 mb-1">Restablecer contraseña</h1>
-
-        {done ? (
-          <>
-            <p className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-3 py-2 mt-4">
-              Tu contraseña fue actualizada correctamente.
-            </p>
-            <button className="btn-primary w-full mt-6" onClick={() => navigate('/login')}>Iniciar sesión</button>
-          </>
-        ) : (
-          <>
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 my-4">{error}</div>}
-            <form onSubmit={handleSubmit} className="space-y-4 mt-6">
-              <label className="block text-sm">
-                <span className="block text-gray-700 mb-1 font-medium">Nueva contraseña</span>
-                <PasswordInput required minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-                <span className="text-xs text-gray-400">Mínimo 8 caracteres</span>
-              </label>
-              <button type="submit" disabled={loading} className="btn-primary w-full">
-                {loading ? 'Guardando...' : 'Restablecer contraseña'}
-              </button>
-            </form>
-            <p className="text-sm text-gray-500 mt-6 text-center">
-              <Link to="/login" className="text-primary-700 font-medium hover:underline">Volver a iniciar sesión</Link>
-            </p>
-          </>
-        )}
-      </div>
-    </div>
+    <AuthShell eyebrow="Recuperación" title="Crea una nueva contraseña"
+      footer={!done && <Link to="/login" className="font-semibold text-primary-700 hover:underline">Volver a iniciar sesión</Link>}>
+      {done ? (
+        <div className="space-y-6 text-center">
+          <div className="rounded-2xl bg-emerald-50 p-5 ring-1 ring-inset ring-emerald-600/20">
+            <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-emerald-600" />
+            <p className="text-sm text-emerald-800">Tu contraseña quedó actualizada.</p>
+          </div>
+          <button className="btn-primary btn-lg w-full" onClick={() => navigate('/login')}>Iniciar sesión</button>
+        </div>
+      ) : (
+        <>
+          {error && <FormAlert>{error}</FormAlert>}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="label">Nueva contraseña</label>
+              <PasswordInput required autoComplete="new-password" showStrength value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Confírmala</label>
+              <PasswordInput required autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </div>
+            <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+              {loading ? 'Guardando...' : 'Guardar contraseña'}
+            </button>
+          </form>
+        </>
+      )}
+    </AuthShell>
   )
 }

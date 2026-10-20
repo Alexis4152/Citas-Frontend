@@ -120,7 +120,7 @@ export default function SuperAdminHospitals() {
     <div>
       <div className="flex items-start justify-between gap-3 flex-wrap mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Hospitales y consultorios</h1>
+          <h1 className="page-title">Hospitales y consultorios</h1>
           <p className="text-sm text-gray-500 mt-1">Cada uno ve solo sus propios doctores, pacientes, citas y cobros.</p>
         </div>
         <button className="btn-primary text-sm" onClick={() => setCreating(EMPTY_CREATE)}>+ Nuevo hospital</button>
@@ -133,7 +133,8 @@ export default function SuperAdminHospitals() {
       ) : (
         <div className="space-y-4">
           {hospitals.map((h) => (
-            <div key={h.id} className="card p-5">
+            <div key={h.id} role="button" tabIndex={0} onClick={() => openEdit(h)} onKeyDown={(e) => e.key === 'Enter' && openEdit(h)}
+              className="card card-hover cursor-pointer p-5" title="Toca para editar el hospital o agregar un administrador">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -150,8 +151,8 @@ export default function SuperAdminHospitals() {
                     </span>
                   </div>
                   <div className="mt-2 flex items-center gap-2 text-sm">
-                    <a href={h.publicUrl} target="_blank" rel="noreferrer" className="text-primary-700 hover:underline break-all">{h.publicUrl}</a>
-                    <button type="button" className="text-xs text-gray-500 hover:text-gray-900 border border-gray-200 rounded px-2 py-0.5" onClick={() => copy(h.publicUrl)}>
+                    <a href={h.publicUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-primary-700 hover:underline break-all">{h.publicUrl}</a>
+                    <button type="button" className="text-xs text-gray-500 hover:text-gray-900 border border-gray-200 rounded px-2 py-0.5" onClick={(e) => { e.stopPropagation(); copy(h.publicUrl) }}>
                       Copiar
                     </button>
                   </div>
@@ -162,10 +163,7 @@ export default function SuperAdminHospitals() {
                     Administradores: {h.admins.length === 0 ? 'ninguno' : h.admins.map((a) => `${a.firstName} ${a.lastName} (${a.email})`).join(', ')}
                   </p>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button className="btn-secondary text-sm" onClick={() => setAddingAdminTo({ hospital: h, form: EMPTY_ADMIN })}>+ Administrador</button>
-                  <button className="btn-secondary text-sm" onClick={() => openEdit(h)}>Editar</button>
-                </div>
+                <span className="shrink-0 text-xl text-slate-300">›</span>
               </div>
             </div>
           ))}
@@ -237,7 +235,12 @@ export default function SuperAdminHospitals() {
               <input type="checkbox" className="accent-red-600" checked={editing.form.clearOpenpay} onChange={(e) => updateEdit('clearOpenpay', e.target.checked)} />
               Quitar las llaves de OpenPay (sus pacientes solo podrán pagar en recepción)
             </label>
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-gray-100">
+              <button type="button" className="btn-ghost mr-auto" onClick={() => {
+                const h = hospitals.find((x) => x.id === editing.id)
+                setEditing(null)
+                setAddingAdminTo({ hospital: h, form: EMPTY_ADMIN })
+              }}>+ Agregar administrador</button>
               <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Cancelar</button>
               <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar'}</button>
             </div>

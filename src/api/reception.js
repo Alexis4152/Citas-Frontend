@@ -7,6 +7,7 @@ export const rescheduleAppointment = (id, data) => api.patch(`/reception/appoint
 export const releaseAppointmentSlot = (id) => api.patch(`/reception/appointments/${id}/release-slot`)
 // Módulo de cobro: cita por QR (URL o código), folio (#123) o nombre/teléfono; sin texto, la cola de por cobrar.
 export const lookupChargeAppointments = (q) => api.get('/reception/charge/lookup', { params: { q: q || undefined } })
+export const getChargeToConfirm = () => api.get('/reception/charge/to-confirm')
 export const markAppointmentArrived = (id) => api.patch(`/reception/appointments/${id}/arrived`)
 export const markAppointmentCompleted = (id) => api.patch(`/reception/appointments/${id}/complete`)
 export const markAppointmentNoShow = (id) => api.patch(`/reception/appointments/${id}/no-show`)
@@ -24,6 +25,7 @@ export const listPatientDuplicates = (id) => api.get(`/reception/patients/${id}/
 export const mergePatients = (sourceId, targetId) => api.post(`/reception/patients/${sourceId}/merge-into/${targetId}`)
 
 export const updatePatientMedicalInfo = (id, data) => api.put(`/reception/patients/${id}/medical-info`, data)
+export const updatePatientProfile = (id, data) => api.put(`/reception/patients/${id}/profile`, data)
 
 // Solo lectura -- la receta la genera el doctor; recepción/admin solo consultan el historial.
 export const listPatientPrescriptions = (patientId) => api.get(`/reception/patients/${patientId}/prescriptions`)

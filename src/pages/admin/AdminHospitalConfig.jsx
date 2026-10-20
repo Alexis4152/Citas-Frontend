@@ -5,6 +5,8 @@ import { useHospitalConfig } from '../../context/HospitalConfigContext'
 import { isValidHex } from '../../utils/theme'
 import { resolveMediaUrl } from '../../utils/media'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../../utils/phone'
+import { Settings } from 'lucide-react'
+import { PageHeader, Skeleton } from '../../components/ui'
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
 
@@ -59,6 +61,18 @@ export default function AdminHospitalConfig() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (form.autoNoShowEnabled && !(form.noShowGraceMinutes >= 5 && form.noShowGraceMinutes <= 240)) {
+      notify('La espera antes de marcar "no asistió" debe ser de 5 a 240 minutos', 'error')
+      return
+    }
+    if (form.postalCode && form.postalCode.length !== 5) {
+      notify('El código postal debe tener 5 dígitos', 'error')
+      return
+    }
+    if (form.whatsapp && form.whatsapp.length !== 10) {
+      notify('El WhatsApp debe tener 10 dígitos', 'error')
+      return
+    }
     if (form.contactPhone && form.contactPhone.length !== 10) {
       notify('El teléfono de contacto debe tener exactamente 10 dígitos', 'error')
       return
@@ -78,10 +92,11 @@ export default function AdminHospitalConfig() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Configuración del hospital</h1>
+      <PageHeader icon={Settings} eyebrow="Hospital" title="Configuración del hospital"
+        description="Marca, datos fiscales y dirección. Aparecen en la página pública, los correos y los PDF." />
 
       {loading || !form ? (
-        <p className="text-gray-500">Cargando...</p>
+        <Skeleton className="h-96 rounded-2xl" />
       ) : (
         <form onSubmit={handleSubmit} className="card p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -119,6 +134,42 @@ export default function AdminHospitalConfig() {
               </div>
             )}
 
+            <SectionTitle>Datos fiscales y dirección</SectionTitle>
+            <Field label="Razón social"><input maxLength={200} className="input" placeholder="Hospital Central S.A. de C.V." value={form.legalName || ''} onChange={(e) => update('legalName', e.target.value)} /></Field>
+            <Field label="RFC"><input maxLength={13} className="input uppercase" placeholder="HCE010101AB1" value={form.rfc || ''} onChange={(e) => update('rfc', e.target.value.toUpperCase().replace(/\s/g, ''))} /></Field>
+            <Field label="Calle y número" className="sm:col-span-2"><input maxLength={255} className="input" value={form.addressLine || ''} onChange={(e) => update('addressLine', e.target.value)} /></Field>
+            <Field label="Colonia"><input maxLength={120} className="input" value={form.neighborhood || ''} onChange={(e) => update('neighborhood', e.target.value)} /></Field>
+            <Field label="Código postal"><input inputMode="numeric" maxLength={5} className="input" placeholder="06700" value={form.postalCode || ''} onChange={(e) => update('postalCode', onlyDigits(e.target.value).slice(0, 5))} /></Field>
+            <Field label="Ciudad o municipio"><input maxLength={100} className="input" value={form.city || ''} onChange={(e) => update('city', e.target.value)} /></Field>
+            <Field label="Estado"><input maxLength={100} className="input" value={form.state || ''} onChange={(e) => update('state', e.target.value)} /></Field>
+            <SectionTitle>Contacto en línea</SectionTitle>
+            <Field label="Sitio web"><input type="url" maxLength={200} className="input" placeholder="https://mihospital.com" value={form.website || ''} onChange={(e) => update('website', e.target.value.trim())} /></Field>
+            <Field label="WhatsApp"><input className="input" {...PHONE_INPUT_PROPS} value={form.whatsapp || ''} onChange={(e) => update('whatsapp', onlyDigits(e.target.value))} /></Field>
+            <Field label="Horario de atención" className="sm:col-span-2"><input maxLength={200} className="input" placeholder="Lunes a viernes 8:00–20:00 · Sábado 9:00–14:00" value={form.openingHours || ''} onChange={(e) => update('openingHours', e.target.value)} /></Field>
+
+            <SectionTitle>Citas sin confirmar</SectionTitle>
+            <div className="sm:col-span-2 rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input type="checkbox" className="mt-1 h-4 w-4 accent-primary-600" checked={!!form.autoNoShowEnabled}
+                  onChange={(e) => update('autoNoShowEnabled', e.target.checked)} />
+                <span>
+                  <span className="block font-medium text-slate-800">Marcar "no asistió" automáticamente</span>
+                  <span className="block text-xs text-slate-500">
+                    Apagado (recomendado): cuando pasa la hora de una cita y nadie registró la llegada, aparece en Cobrar → "Confirma si llegó"
+                    y en el tablero, para que recepción confirme. Prendido: el sistema la marca sola como "no asistió" pasado el tiempo de espera.
+                  </span>
+                </span>
+              </label>
+              {form.autoNoShowEnabled && (
+                <label className="mt-3 flex flex-wrap items-center gap-2 pl-7 text-sm text-slate-700">
+                  Esperar
+                  <input type="number" min={5} max={240} step={5} className="input w-24" value={form.noShowGraceMinutes ?? 30}
+                    onChange={(e) => update('noShowGraceMinutes', e.target.value === '' ? '' : Number(e.target.value))} />
+                  minutos después de que termina la cita
+                </label>
+              )}
+            </div>
+
             <Field label="Descripción" className="sm:col-span-2">
               <textarea className="input" rows={2} value={form.description || ''} onChange={(e) => update('description', e.target.value)} />
             </Field>
@@ -131,6 +182,10 @@ export default function AdminHospitalConfig() {
       )}
     </div>
   )
+}
+
+function SectionTitle({ children }) {
+  return <p className="sm:col-span-2 mt-2 border-t border-slate-100 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">{children}</p>
 }
 
 function Field({ label, children, className = '' }) {

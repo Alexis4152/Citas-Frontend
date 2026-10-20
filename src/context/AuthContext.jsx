@@ -1,7 +1,7 @@
 import { getHospitalSlug, sessionStorageKey } from '../tenant'
 import { createContext, useContext, useState, useEffect } from 'react'
 import { login as apiLogin, register as apiRegister, logout as apiLogout } from '../api/auth'
-import { setAccessToken, refreshSession } from '../api/axios'
+import api, { setAccessToken, refreshSession } from '../api/axios'
 
 const AuthContext = createContext(null)
 
@@ -34,6 +34,16 @@ function belongsHere(user) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  // Permisos efectivos del personal (ver PermissionService en el backend). El ADMIN los trae todos.
+  const [permissions, setPermissions] = useState([])
+
+  useEffect(() => {
+    if (!user || !['ADMIN', 'RECEPTIONIST', 'DOCTOR'].includes(user.role)) {
+      setPermissions([])
+      return
+    }
+    api.get('/auth/permissions').then((r) => setPermissions(r.data.data || [])).catch(() => setPermissions([]))
+  }, [user?.id, user?.role])
 
   useEffect(() => {
     const stored = localStorage.getItem(sessionStorageKey())
@@ -112,12 +122,14 @@ export function AuthProvider({ children }) {
   const isReceptionist = role === 'RECEPTIONIST'
   const isPatient = role === 'PATIENT'
   const isSuperAdmin = role === 'SUPER_ADMIN'
+  /** ¿Puede hacer esto? El ADMIN siempre sí; el backend igual lo valida en cada petición. */
+  const can = (code) => isAdmin || permissions.includes(code)
 
   return (
     <AuthContext.Provider
       value={{
         user, login, register, logout, role, isAdmin, isDoctor, isReceptionist, isPatient, isSuperAdmin,
-        loading, updateUserInMemory, applySession,
+        loading, updateUserInMemory, applySession, permissions, can,
       }}
     >
       {children}

@@ -2,14 +2,27 @@ import { useState } from 'react'
 import { Link, useNavigate } from '../router'
 import { useAuth } from '../context/AuthContext'
 import PasswordInput from '../components/PasswordInput'
+import AuthShell, { FormAlert } from '../layouts/AuthShell'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../utils/phone'
+import { emailError, nameError, passwordProblem, phoneError } from '../utils/validators'
 
 export default function Register() {
   const { register } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '' })
+  const [touched, setTouched] = useState({})
+  const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const errors = {
+    firstName: nameError(form.firstName),
+    lastName: nameError(form.lastName),
+    email: emailError(form.email),
+    phone: phoneError(form.phone, false),
+    password: passwordProblem(form.password),
+  }
+  const show = (field) => (touched[field] ? errors[field] : null)
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
@@ -17,14 +30,16 @@ export default function Register() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (form.phone && form.phone.length !== 10) {
-      setError('El teléfono debe tener exactamente 10 dígitos')
+    setTouched({ firstName: true, lastName: true, email: true, phone: true, password: true })
+    if (Object.values(errors).some(Boolean)) return
+    if (!accepted) {
+      setError('Acepta el aviso de privacidad para crear tu cuenta')
       return
     }
     setError('')
     setLoading(true)
     try {
-      await register(form)
+      await register({ ...form, firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim() })
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.message || 'No pudimos crear tu cuenta')
@@ -33,47 +48,52 @@ export default function Register() {
     }
   }
 
+  const field = (name) => ({
+    className: `input ${show(name) ? 'input-error' : ''}`,
+    onBlur: () => setTouched((t) => ({ ...t, [name]: true })),
+  })
+
   return (
-    <div className="container-app py-12 sm:py-20 flex justify-center">
-      <div className="w-full max-w-md card p-6 sm:p-8">
-        <h1 className="text-xl font-bold text-gray-900 mb-1">Crear cuenta</h1>
-        <p className="text-sm text-gray-500 mb-6">Regístrate como paciente para agendar y consultar tus citas.</p>
-
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2 mb-4">{error}</div>}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block text-sm">
-              <span className="block text-gray-700 mb-1 font-medium">Nombre</span>
-              <input required className="input" value={form.firstName} onChange={(e) => update('firstName', e.target.value)} />
-            </label>
-            <label className="block text-sm">
-              <span className="block text-gray-700 mb-1 font-medium">Apellido</span>
-              <input required className="input" value={form.lastName} onChange={(e) => update('lastName', e.target.value)} />
-            </label>
+    <AuthShell eyebrow="Pacientes" title="Crea tu cuenta" subtitle="Agenda más rápido, consulta tu historial y recibe avisos de tus citas." wide
+      footer={<p>¿Ya tienes cuenta? <Link to="/login" className="font-semibold text-primary-700 hover:underline">Inicia sesión</Link></p>}>
+      {error && <FormAlert>{error}</FormAlert>}
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="reg-first">Nombre</label>
+            <input id="reg-first" autoComplete="given-name" {...field('firstName')} value={form.firstName} onChange={(e) => update('firstName', e.target.value)} />
+            {show('firstName') && <p className="field-error">{show('firstName')}</p>}
           </div>
-          <label className="block text-sm">
-            <span className="block text-gray-700 mb-1 font-medium">Correo electrónico</span>
-            <input required type="email" className="input" value={form.email} onChange={(e) => update('email', e.target.value)} />
-          </label>
-          <label className="block text-sm">
-            <span className="block text-gray-700 mb-1 font-medium">Teléfono</span>
-            <input className="input" {...PHONE_INPUT_PROPS} value={form.phone} onChange={(e) => update('phone', onlyDigits(e.target.value))} />
-          </label>
-          <label className="block text-sm">
-            <span className="block text-gray-700 mb-1 font-medium">Contraseña</span>
-            <PasswordInput required minLength={8} value={form.password} onChange={(e) => update('password', e.target.value)} />
-            <span className="text-xs text-gray-400">Mínimo 8 caracteres, con al menos una mayúscula y un número</span>
-          </label>
-          <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? 'Creando cuenta...' : 'Crear cuenta'}
-          </button>
-        </form>
-
-        <p className="text-sm text-gray-500 mt-6 text-center">
-          ¿Ya tienes cuenta? <Link to="/login" className="text-primary-700 font-medium hover:underline">Inicia sesión</Link>
-        </p>
-      </div>
-    </div>
+          <div>
+            <label className="label" htmlFor="reg-last">Apellido</label>
+            <input id="reg-last" autoComplete="family-name" {...field('lastName')} value={form.lastName} onChange={(e) => update('lastName', e.target.value)} />
+            {show('lastName') && <p className="field-error">{show('lastName')}</p>}
+          </div>
+        </div>
+        <div>
+          <label className="label" htmlFor="reg-email">Correo electrónico</label>
+          <input id="reg-email" type="email" autoComplete="email" {...field('email')} value={form.email} onChange={(e) => update('email', e.target.value)} />
+          {show('email') && <p className="field-error">{show('email')}</p>}
+        </div>
+        <div>
+          <label className="label" htmlFor="reg-phone">Teléfono <span className="font-normal text-slate-400">(opcional)</span></label>
+          <input id="reg-phone" {...PHONE_INPUT_PROPS} {...field('phone')} value={form.phone} onChange={(e) => update('phone', onlyDigits(e.target.value))} />
+          {show('phone') && <p className="field-error">{show('phone')}</p>}
+        </div>
+        <div>
+          <label className="label" htmlFor="reg-pass">Contraseña</label>
+          <PasswordInput id="reg-pass" autoComplete="new-password" showStrength className={`input ${show('password') ? 'input-error' : ''}`}
+            value={form.password} onChange={(e) => update('password', e.target.value)} onBlur={() => setTouched((t) => ({ ...t, password: true }))} />
+          {show('password') && <p className="field-error">{show('password')}</p>}
+        </div>
+        <label className="flex items-start gap-2.5 text-sm text-slate-600">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 rounded accent-primary-600" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
+          <span>Leí y acepto el <Link to="/aviso-de-privacidad" className="font-medium text-primary-700 hover:underline" target="_blank">aviso de privacidad</Link>.</span>
+        </label>
+        <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+          {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+        </button>
+      </form>
+    </AuthShell>
   )
 }

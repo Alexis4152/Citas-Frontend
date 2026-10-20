@@ -123,7 +123,7 @@ export default function AdminDoctorDetail() {
         )}
         <div className="flex-1">
           <div className="flex items-start justify-between gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-gray-900">Dr(a). {doctor.firstName} {doctor.lastName}</h1>
+            <h1 className="page-title">Dr(a). {doctor.firstName} {doctor.lastName}</h1>
             <div className="flex items-center gap-2">
               <Link to={`/admin/agenda-doctores?doctorId=${id}`} className="btn-secondary text-sm">Ver agenda</Link>
               <Link to={`/admin/doctores/${id}/editar`} className="btn-secondary text-sm">Editar</Link>

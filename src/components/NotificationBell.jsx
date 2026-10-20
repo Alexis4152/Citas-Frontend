@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Bell, CalendarClock, CalendarPlus, CalendarX2 } from 'lucide-react'
 import { useNavigate } from '../router'
 import {
   listNotifications, getUnreadNotificationCount, markNotificationAsRead, markAllNotificationsAsRead,
@@ -8,7 +9,12 @@ import useOutsideClick from '../hooks/useOutsideClick'
 import useEscapeKey from '../hooks/useEscapeKey'
 import usePolling from '../hooks/usePolling'
 
-const TYPE_ICON = { NEW_APPOINTMENT: '📅', APPOINTMENT_CANCELLED: '🚫', APPOINTMENT_RESCHEDULED: '🔄' }
+const TYPE_ICON = {
+  NEW_APPOINTMENT: { icon: CalendarPlus, box: 'bg-blue-50 text-blue-600' },
+  APPOINTMENT_CANCELLED: { icon: CalendarX2, box: 'bg-rose-50 text-rose-600' },
+  APPOINTMENT_RESCHEDULED: { icon: CalendarClock, box: 'bg-amber-50 text-amber-600' },
+  DEFAULT: { icon: Bell, box: 'bg-slate-100 text-slate-600' },
+}
 
 function relativeTime(isoDate) {
   const diffMs = Date.now() - new Date(isoDate).getTime()
@@ -120,21 +126,21 @@ export default function NotificationBell() {
     <div className="relative" ref={ref}>
       <button
         onClick={toggleOpen}
-        className="relative p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
+        className="relative grid h-9 w-9 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
         aria-label="Notificaciones"
       >
-        <span className="text-xl">🔔</span>
+        <Bell className="h-[18px] w-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] leading-none rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-1">
+          <span className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white rounded-lg shadow-lg border border-gray-100 z-50">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <span className="font-semibold text-gray-900 text-sm">Notificaciones</span>
+        <div className="absolute right-0 z-50 mt-2 w-80 max-w-[90vw] overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 animate-scale-in">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+            <span className="text-sm font-semibold text-slate-900">Notificaciones</span>
             {unreadCount > 0 && (
               <button onClick={handleMarkAllAsRead} className="text-xs text-primary-700 hover:underline">
                 Marcar todas como leídas
@@ -156,7 +162,15 @@ export default function NotificationBell() {
                     n.read ? '' : 'bg-primary-50/40'
                   }`}
                 >
-                  <span className="text-lg shrink-0">{TYPE_ICON[n.type] || '🔔'}</span>
+                  {(() => {
+                    const meta = TYPE_ICON[n.type] || TYPE_ICON.DEFAULT
+                    const Icon = meta.icon
+                    return (
+                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${meta.box}`}>
+                        <Icon className="h-4 w-4" />
+                      </span>
+                    )
+                  })()}
                   <span className="flex-1 min-w-0">
                     <span className={`block text-sm ${n.read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
                       {n.message}

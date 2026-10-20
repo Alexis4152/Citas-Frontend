@@ -47,7 +47,7 @@ export default function AdminDoctors() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Doctores</h1>
+        <h1 className="page-title">Doctores</h1>
         <Link to="/admin/doctores/nuevo" className="btn-primary text-sm">+ Nuevo doctor</Link>
       </div>
 
@@ -97,9 +97,7 @@ export default function AdminDoctors() {
                       <td className="px-4 py-3 font-medium text-primary-700">Dr(a). {d.firstName} {d.lastName}</td>
                       <td className="px-4 py-3 text-gray-600">{d.specialty?.name}</td>
                       <td className="px-4 py-3 text-gray-600">{d.branches?.map((b) => b.name).join(' · ')}</td>
-                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <Link to={`/admin/doctores/${d.id}`} className="text-primary-700 hover:underline text-sm">Ver historial</Link>
-                      </td>
+                      <td className="px-4 py-3 text-right text-slate-300">›</td>
                     </tr>
                   ))}
                   {result.content.length === 0 && (

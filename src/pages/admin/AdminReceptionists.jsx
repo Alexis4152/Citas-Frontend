@@ -8,6 +8,8 @@ import Modal from '../../components/Modal'
 import AdminPagination from '../../components/AdminPagination'
 import useDebouncedValue from '../../hooks/useDebouncedValue'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../../utils/phone'
+import { ChevronRight, Plus, Search, UserCog } from 'lucide-react'
+import { Avatar, Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui'
 
 const EMPTY = { email: '', firstName: '', lastName: '', phone: '', specialtyIds: [] }
 
@@ -29,7 +31,7 @@ export default function AdminReceptionists() {
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [createdInfo, setCreatedInfo] = useState(null)
-  const [deactivatingId, setDeactivatingId] = useState(null)
+  const [deactivating, setDeactivating] = useState(false)
 
   function load() {
     setLoading(true)
@@ -41,11 +43,6 @@ export default function AdminReceptionists() {
   useEffect(() => { load() }, [page, size, debouncedQuery])
   useEffect(() => { setPage(0) }, [debouncedQuery])
   useEffect(() => { getSpecialties().then((r) => setSpecialties(r.data.data)).catch(() => {}) }, [])
-
-  function handleClearSearch() {
-    setQuery('')
-    setPage(0)
-  }
 
   function openCreate() {
     setEditingId(null)
@@ -98,109 +95,57 @@ export default function AdminReceptionists() {
     }
   }
 
-  async function handleDeactivate(id, name) {
-    const ok = await confirmDialog(`¿Desactivar a "${name}"? Ya no podrá iniciar sesión.`, { confirmText: 'Desactivar' })
+  async function handleDeactivate() {
+    const ok = await confirmDialog(`¿Desactivar a "${form.firstName} ${form.lastName}"? Ya no podrá iniciar sesión.`, { confirmText: 'Desactivar' })
     if (!ok) return
-    setDeactivatingId(id)
+    setDeactivating(true)
     try {
-      await adminDeactivateReceptionist(id)
+      await adminDeactivateReceptionist(editingId)
       notify('Recepcionista desactivado', 'success')
+      setModalOpen(false)
       load()
     } catch (err) {
       notify(err.response?.data?.message || 'No se pudo desactivar', 'error')
     } finally {
-      setDeactivatingId(null)
+      setDeactivating(false)
     }
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Recepcionistas</h1>
-        <button className="btn-primary text-sm" onClick={openCreate}>+ Agregar recepcionista</button>
-      </div>
+      <PageHeader icon={UserCog} eyebrow="Personal" title="Recepcionistas" description="Toca a una persona para editar sus datos o desactivarla."
+        actions={<button className="btn-primary" onClick={openCreate}><Plus className="h-4 w-4" /> Agregar recepcionista</button>} />
 
-      <div className="card p-4 mb-4 flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[220px]">
-          <label className="text-xs font-medium text-gray-600 block mb-1">Nombre o correo</label>
-          <input className="input" placeholder="Buscar..." value={query} onChange={(e) => setQuery(e.target.value)} />
+      <div className="card mb-4 p-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input className="input pl-10" placeholder="Buscar por nombre o correo" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        {query && (
-          <button type="button" className="btn-secondary text-sm" onClick={handleClearSearch}>
-            Limpiar
-          </button>
-        )}
       </div>
 
-      <div className="card p-0 overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
-          <p className="text-gray-500 text-sm p-4">Cargando...</p>
+          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
+        ) : result.content.length === 0 ? (
+          <EmptyState icon={UserCog} title="Sin recepcionistas" description="Agrega a la primera persona de recepción." />
         ) : (
-          <>
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-left text-gray-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Nombre</th>
-                    <th className="px-4 py-3 font-medium">Correo</th>
-                    <th className="px-4 py-3 font-medium">Teléfono</th>
-                    <th className="px-4 py-3 font-medium">Especialidad</th>
-                    <th className="px-4 py-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.content.map((u) => (
-                    <tr key={u.id} className="border-t border-gray-100">
-                      <td className="px-4 py-3 font-medium text-gray-900">{u.firstName} {u.lastName}</td>
-                      <td className="px-4 py-3 text-gray-600">{u.email}</td>
-                      <td className="px-4 py-3 text-gray-600">{u.phone || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {u.specialties?.length ? u.specialties.map((s) => s.name).join(' · ') : (
-                          <span className="text-gray-400">General</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => openEdit(u)} className="text-primary-700 hover:underline mr-3">Editar</button>
-                        <button
-                          onClick={() => handleDeactivate(u.id, `${u.firstName} ${u.lastName}`)}
-                          disabled={deactivatingId === u.id}
-                          className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                        >
-                          {deactivatingId === u.id ? 'Desactivando...' : 'Desactivar'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {result.content.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin recepcionistas</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden divide-y divide-gray-100">
-              {result.content.map((u) => (
-                <div key={u.id} className="px-4 py-3">
-                  <p className="font-medium text-gray-900">{u.firstName} {u.lastName}</p>
-                  <p className="text-sm text-gray-600 mt-0.5">{u.email}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{u.phone || '—'} · {u.specialties?.length ? u.specialties.map((s) => s.name).join(' · ') : 'General'}</p>
-                  <div className="flex gap-4 mt-2 text-sm">
-                    <button onClick={() => openEdit(u)} className="text-primary-700 hover:underline">Editar</button>
-                    <button
-                      onClick={() => handleDeactivate(u.id, `${u.firstName} ${u.lastName}`)}
-                      disabled={deactivatingId === u.id}
-                      className="text-red-600 hover:underline disabled:opacity-50 disabled:no-underline"
-                    >
-                      {deactivatingId === u.id ? 'Desactivando...' : 'Desactivar'}
-                    </button>
+          <ul className="divide-y divide-slate-100">
+            {result.content.map((u) => (
+              <li key={u.id}>
+                <button onClick={() => openEdit(u)} className="group flex w-full items-center gap-3 px-5 py-3.5 text-left transition hover:bg-slate-50">
+                  <Avatar first={u.firstName} last={u.lastName} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">{u.firstName} {u.lastName}</p>
+                    <p className="truncate text-xs text-slate-500">{u.email}{u.phone && ` · ${u.phone}`}</p>
                   </div>
-                </div>
-              ))}
-              {result.content.length === 0 && (
-                <p className="px-4 py-8 text-center text-gray-400 text-sm">Sin recepcionistas</p>
-              )}
-            </div>
-          </>
+                  <span className="hidden max-w-[40%] flex-wrap justify-end gap-1 sm:flex">
+                    {u.specialties?.length ? u.specialties.map((s) => <Badge key={s.id} tone="brand">{s.name}</Badge>) : <Badge>General</Badge>}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-primary-600" />
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
         <AdminPagination
           page={result.page} size={size} totalPages={result.totalPages} totalElements={result.totalElements}
@@ -243,7 +188,12 @@ export default function AdminReceptionists() {
                 </p>
               </Field>
             </div>
-            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+              {editingId && (
+                <button type="button" className="btn-danger-ghost mr-auto" disabled={deactivating} onClick={handleDeactivate}>
+                  {deactivating ? 'Desactivando...' : 'Desactivar acceso'}
+                </button>
+              )}
               <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
               <button type="submit" disabled={saving} className="btn-primary">
                 {saving ? 'Guardando...' : editingId ? 'Actualizar recepcionista' : 'Crear recepcionista'}

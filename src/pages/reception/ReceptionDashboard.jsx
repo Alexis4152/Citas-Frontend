@@ -3,8 +3,11 @@ import { Link } from '../../router'
 import { searchAppointments } from '../../api/reception'
 import { useAuth } from '../../context/AuthContext'
 import { formatTimeOnly, localTodayIso } from '../../utils/format'
-import { AppointmentFlags } from '../../components/StatusBadge'
 import usePolling from '../../hooks/usePolling'
+import { AppointmentBadges } from '../../components/StatusBadge'
+import { PageHeader, StatCard as Kpi } from '../../components/ui'
+import PendingArrivalAlert from '../../components/PendingArrivalAlert'
+import { Banknote, CalendarCheck2, CalendarDays, CalendarPlus, CalendarX2, LayoutDashboard, Unlock } from 'lucide-react'
 
 // Hora LOCAL del navegador: toISOString() es UTC y cambiaba de día a las 6 pm en México.
 const todayIso = localTodayIso
@@ -46,28 +49,21 @@ export default function ReceptionDashboard() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Recepción — Hoy</h1>
-          {isSpecialtyRestricted && (
-            <p className="text-sm text-gray-500 mt-1">
-              Mostrando solo: {user.specialties.map((s) => s.name).join(', ')}.
-            </p>
-          )}
-        </div>
-        <Link to="/recepcion/nueva-cita" className="btn-primary text-sm">+ Nueva cita</Link>
-      </div>
+      <PageHeader icon={LayoutDashboard} eyebrow="Recepción" title="Hoy"
+        description={isSpecialtyRestricted ? `Mostrando solo: ${user.specialties.map((s) => s.name).join(', ')}.` : 'Citas del día, cobros pendientes y lo que hay que atender.'}
+        actions={<Link to="/recepcion/nueva-cita" className="btn-primary"><CalendarPlus className="h-4 w-4" /> Nueva cita</Link>} />
+      <PendingArrivalAlert />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <StatCard label="Citas hoy" value={appointments.length} icon="📅" to={`/recepcion/citas?from=${todayIso()}&to=${todayIso()}`} />
-        <StatCard label="Programadas" value={scheduled.length} icon="✅" to={`/recepcion/citas?from=${todayIso()}&to=${todayIso()}&status=SCHEDULED`} />
-        <StatCard label="Canceladas" value={cancelled.length} icon="🚫" to={`/recepcion/citas?from=${todayIso()}&to=${todayIso()}&status=CANCELLED`} />
-        <StatCard label="Por cobrar" value={pendingPayment} icon="💰" to="/recepcion/citas?pendingPayment=1" />
-        <StatCard label="Por liberar" value={pendingRelease} icon="🔓" to="/recepcion/citas?pendingRelease=1" />
+        <StatCard label="Citas hoy" value={appointments.length} icon={CalendarDays} to={`/recepcion/citas?from=${todayIso()}&to=${todayIso()}`} />
+        <StatCard label="Programadas" value={scheduled.length} icon={CalendarCheck2} tone="blue" to={`/recepcion/citas?from=${todayIso()}&to=${todayIso()}&status=SCHEDULED`} />
+        <StatCard label="Canceladas" value={cancelled.length} icon={CalendarX2} tone="red" to={`/recepcion/citas?from=${todayIso()}&to=${todayIso()}&status=CANCELLED`} />
+        <StatCard label="Por cobrar" value={pendingPayment} icon={Banknote} tone="amber" to="/recepcion/citas?pendingPayment=1" />
+        <StatCard label="Por liberar" value={pendingRelease} icon={Unlock} tone="green" to="/recepcion/citas?pendingRelease=1" />
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-800">Agenda de hoy</div>
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><p className="font-display text-lg font-semibold text-slate-900">Agenda de hoy</p><span className="text-xs text-slate-500">Se actualiza cada 30 s</span></div>
         {loading ? (
           <p className="text-gray-500 text-sm p-4">Cargando...</p>
         ) : (
@@ -92,7 +88,7 @@ export default function ReceptionDashboard() {
                         <td className="px-4 py-3 text-gray-900">{a.patient?.firstName} {a.patient?.lastName}</td>
                         <td className="px-4 py-3 text-gray-600">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName}</td>
                         <td className="px-4 py-3 text-gray-600">{a.branch?.name}</td>
-                        <td className="px-4 py-3 text-gray-600">{a.status}<AppointmentFlags appointment={a} /></td>
+                        <td className="px-4 py-3"><AppointmentBadges appointment={a} /></td>
                       </tr>
                     ))}
                   {appointments.length === 0 && (
@@ -109,7 +105,7 @@ export default function ReceptionDashboard() {
                   <div key={a.id} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-medium text-gray-900">{formatTimeOnly(a.startTime)} — {a.patient?.firstName} {a.patient?.lastName}</p>
-                      <span className="text-xs text-gray-500 shrink-0">{a.status}<AppointmentFlags appointment={a} /></span>
+                      <span className="shrink-0"><AppointmentBadges appointment={a} /></span>
                     </div>
                     <p className="text-sm text-gray-600 mt-0.5">Dr(a). {a.doctor?.firstName} {a.doctor?.lastName} · {a.branch?.name}</p>
                   </div>
@@ -125,18 +121,6 @@ export default function ReceptionDashboard() {
   )
 }
 
-function StatCard({ label, value, icon, to }) {
-  const content = (
-    <>
-      <span className="text-2xl">{icon}</span>
-      <div>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-sm text-gray-500">{label}</p>
-      </div>
-    </>
-  )
-  if (to) {
-    return <Link to={to} className="card p-5 flex items-center gap-4 hover:shadow-md transition-shadow">{content}</Link>
-  }
-  return <div className="card p-5 flex items-center gap-4">{content}</div>
+function StatCard({ label, value, icon, tone, to }) {
+  return <Link to={to} className="block"><Kpi label={label} value={value} icon={icon} tone={tone} /></Link>
 }
