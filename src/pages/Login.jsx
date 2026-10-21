@@ -44,8 +44,8 @@ export default function Login() {
         <div className="space-y-3">
           <p>¿No tienes cuenta? <Link to="/registro" className="font-semibold text-primary-700 hover:underline">Regístrate gratis</Link></p>
           <p className="text-xs">
-            <Link to="/derechos-arco" className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-600">
-              <ShieldCheck className="h-3.5 w-3.5" /> Derechos ARCO sobre tus datos personales
+            <Link to="/privacidad" className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-600">
+              <ShieldCheck className="h-3.5 w-3.5" /> Cómo cuidamos tu privacidad
             </Link>
           </p>
         </div>

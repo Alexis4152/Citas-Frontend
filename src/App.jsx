@@ -59,7 +59,13 @@ import AdminPermissions from './pages/admin/AdminPermissions'
 import ReportsPage from './pages/ReportsPage'
 import ArcoRequestPage from './pages/ArcoRequestPage'
 import PrivacyNotice from './pages/PrivacyNotice'
-import MyArcoRequests from './pages/MyArcoRequests'
+import PrivacyHub from './pages/PrivacyHub'
+import TermsPage from './pages/TermsPage'
+import ArcoTrackingPage from './pages/ArcoTrackingPage'
+import PrivacyCenter from './pages/PrivacyCenter'
+import DeleteAccountPage from './pages/DeleteAccountPage'
+import ActivateAccount from './pages/ActivateAccount'
+import AdminArcoDetail from './pages/admin/AdminArcoDetail'
 import SuperAdminArco from './pages/platform/SuperAdminArco'
 import {
   Banknote, Building2, CalendarDays, CalendarPlus, CalendarRange, ClipboardList, Clock3, Hospital, LayoutDashboard, Mail,
@@ -202,10 +208,17 @@ function HospitalRoutes() {
         <Route path="cancelar-cita" element={<CancelAppointment />} />
         <Route path="cancelar-cita/:token" element={<CancelAppointment />} />
         <Route path="aviso-de-privacidad" element={<PrivacyNotice />} />
+        <Route path="privacidad" element={<PrivacyHub />} />
+        <Route path="terminos-y-condiciones" element={<TermsPage />} />
         <Route path="derechos-arco" element={<ArcoRequestPage />} />
+        <Route path="derechos-arco/seguimiento/:token" element={<ArcoTrackingPage />} />
+        <Route path="eliminar-cuenta" element={<DeleteAccountPage />} />
+        <Route path="activar-cuenta/:token" element={<ActivateAccount />} />
 
         <Route path="mis-citas" element={<PrivateRoute roles={['PATIENT']}><MyAppointments /></PrivateRoute>} />
-        <Route path="mis-solicitudes-arco" element={<PrivateRoute roles={['PATIENT']}><MyArcoRequests /></PrivateRoute>} />
+        <Route path="mi-privacidad" element={<PrivateRoute roles={['PATIENT']}><PrivacyCenter /></PrivateRoute>} />
+        {/* Nombre anterior: los enlaces de correos viejos siguen funcionando. */}
+        <Route path="mis-solicitudes-arco" element={<Navigate to="/mi-privacidad" replace />} />
 
         <Route path="*" element={<NotFound />} />
       </Route>
@@ -290,6 +303,7 @@ function HospitalRoutes() {
         <Route path="configuracion" element={<AdminHospitalConfig />} />
         <Route path="correo" element={<AdminEmailConfig />} />
         <Route path="solicitudes-arco" element={<AdminArcoRequests />} />
+        <Route path="solicitudes-arco/:id" element={<AdminArcoDetail />} />
         <Route path="bitacora" element={<AdminAuditLog />} />
         <Route path="permisos" element={<AdminPermissions />} />
         <Route path="reportes" element={<ReportsPage />} />

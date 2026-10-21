@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Eye, FilePen, ShieldOff, Trash2 } from 'lucide-react'
+import { BellOff, Eye, FilePen, ShieldOff, Trash2, Undo2 } from 'lucide-react'
 import { Link } from '../router'
 import { ARCO_TYPES } from '../api/arco'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../utils/phone'
 import { emailError, nameError, phoneError } from '../utils/validators'
 
-const ICONS = { ACCESS: Eye, RECTIFICATION: FilePen, CANCELLATION: Trash2, OPPOSITION: ShieldOff }
+const ICONS = { ACCESS: Eye, RECTIFICATION: FilePen, CANCELLATION: Trash2, OPPOSITION: ShieldOff, REVOCATION: Undo2, LIMITATION: BellOff }
+/** Derechos que exponen o borran datos: con sesión se confirma la contraseña. */
+const STRONG = ['ACCESS', 'RECTIFICATION', 'CANCELLATION', 'REVOCATION']
 
 /**
  * Formulario de solicitud ARCO, compartido por la página pública y "Mis solicitudes". Con
@@ -13,11 +15,13 @@ const ICONS = { ACCESS: Eye, RECTIFICATION: FilePen, CANCELLATION: Trash2, OPPOS
  * mismo que el backend: nombre real, correo con dominio, teléfono de 10 dígitos, detalle
  * obligatorio para Rectificación/Oposición y aceptación del aviso de privacidad.
  */
-export default function ArcoForm({ account, onSubmit, submitting }) {
-  const [form, setForm] = useState({ requesterName: '', requesterEmail: '', requesterPhone: '', type: '', details: '' })
+export default function ArcoForm({ account, onSubmit, submitting, initialType = '' }) {
+  const [form, setForm] = useState({ requesterName: '', requesterEmail: '', requesterPhone: '', type: initialType, details: '',
+    representative: false, representativeName: '', password: '' })
   const [accepted, setAccepted] = useState(false)
   const [touched, setTouched] = useState({})
-  const needsDetail = form.type === 'RECTIFICATION' || form.type === 'OPPOSITION'
+  const needsDetail = form.type === 'RECTIFICATION' || form.type === 'OPPOSITION' || form.type === 'LIMITATION'
+  const needsPassword = !!account && STRONG.includes(form.type)
 
   const errors = {
     requesterName: account ? null : nameError(form.requesterName),
@@ -26,13 +30,16 @@ export default function ArcoForm({ account, onSubmit, submitting }) {
     type: form.type ? null : 'Elige qué quieres hacer',
     details: needsDetail && form.details.trim().length < 10 ? 'Cuéntanos qué dato o qué uso (mínimo 10 caracteres)' : null,
     accepted: accepted ? null : 'Acepta el aviso de privacidad',
+    representativeName: form.representative && form.representativeName.trim().length < 5 ? 'Escribe tu nombre completo' : null,
+    password: needsPassword && !form.password ? 'Confirma tu contraseña' : null,
   }
   const show = (f) => (touched[f] ? errors[f] : null)
   const set = (f, v) => setForm((s) => ({ ...s, [f]: v }))
 
   function handleSubmit(e) {
     e.preventDefault()
-    setTouched({ requesterName: true, requesterEmail: true, requesterPhone: true, type: true, details: true, accepted: true })
+    setTouched({ requesterName: true, requesterEmail: true, requesterPhone: true, type: true, details: true, accepted: true,
+      representativeName: true, password: true })
     if (Object.values(errors).some(Boolean)) return
     onSubmit({
       requesterName: account ? undefined : form.requesterName.trim(),
@@ -40,6 +47,9 @@ export default function ArcoForm({ account, onSubmit, submitting }) {
       requesterPhone: form.requesterPhone || undefined,
       type: form.type,
       details: form.details.trim() || undefined,
+      representative: form.representative || undefined,
+      representativeName: form.representative ? form.representativeName.trim() : undefined,
+      password: needsPassword ? form.password : undefined,
       acceptPrivacyNotice: accepted,
     })
   }
@@ -48,7 +58,7 @@ export default function ArcoForm({ account, onSubmit, submitting }) {
     <form onSubmit={handleSubmit} className="space-y-5" noValidate>
       <div>
         <p className="label">¿Qué derecho quieres ejercer?</p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {ARCO_TYPES.map((t) => {
             const Icon = ICONS[t.value]
             const active = form.type === t.value
@@ -102,6 +112,35 @@ export default function ArcoForm({ account, onSubmit, submitting }) {
           <p className="field-hint">{form.details.length}/2000</p>
         </div>
       </div>
+
+      {!account && (
+        <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+          <label className="flex items-start gap-2.5 text-sm text-slate-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded accent-primary-600" checked={form.representative}
+              onChange={(e) => set('representative', e.target.checked)} />
+            <span>Hago la solicitud <strong>como representante</strong> del titular (padre, madre, tutor o apoderado).
+              <span className="block text-xs text-slate-500">Usa el correo que el titular tiene registrado. Te pediremos tu identificación y el documento que acredite la representación.</span></span>
+          </label>
+          {form.representative && (
+            <div className="mt-3">
+              <label className="label">Tu nombre completo (representante)</label>
+              <input className={`input ${show('representativeName') ? 'input-error' : ''}`} value={form.representativeName}
+                onChange={(e) => set('representativeName', e.target.value)} onBlur={() => setTouched((t) => ({ ...t, representativeName: true }))} />
+              {show('representativeName') && <p className="field-error">{show('representativeName')}</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {needsPassword && (
+        <div>
+          <label className="label">Confirma tu contraseña</label>
+          <input type="password" autoComplete="current-password" className={`input sm:max-w-xs ${show('password') ? 'input-error' : ''}`}
+            value={form.password} onChange={(e) => set('password', e.target.value)} onBlur={() => setTouched((t) => ({ ...t, password: true }))} />
+          {show('password') ? <p className="field-error">{show('password')}</p>
+            : <p className="field-hint">Así confirmamos que eres tú antes de entregar o borrar tus datos.</p>}
+        </div>
+      )}
 
       <div>
         <label className="flex items-start gap-2.5 text-sm text-slate-600">

@@ -17,7 +17,7 @@ import PatientProfileFields, { EMPTY_PROFILE, profileProblem, toProfilePayload }
 import { Avatar, Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui'
 import { ChevronRight, Download, Plus, Upload, Users } from 'lucide-react'
 
-const EMPTY_PATIENT = { firstName: '', lastName: '', phone: '', email: '', createAccount: false }
+const EMPTY_PATIENT = { firstName: '', lastName: '', phone: '', email: '', createAccount: false, privacyConsent: false }
 
 export default function ReceptionPatients() {
   const navigate = useNavigate()
@@ -132,6 +132,10 @@ export default function ReceptionPatients() {
     e.preventDefault()
     if (newPatient.phone.length !== 10) {
       notify('El teléfono debe tener exactamente 10 dígitos', 'error')
+      return
+    }
+    if (!newPatient.privacyConsent) {
+      notify('Confirma que el paciente aceptó el aviso de privacidad', 'error')
       return
     }
     if (newPatient.createAccount && !newPatient.email) {
@@ -284,6 +288,11 @@ export default function ReceptionPatients() {
                 Crear cuenta de acceso para este paciente — le llegará una contraseña temporal por
                 correo y se le pedirá cambiarla en su primer inicio de sesión.
               </span>
+            </label>
+            <label className="flex items-start gap-2 rounded-xl bg-primary-50/60 p-3 text-sm text-slate-700 ring-1 ring-inset ring-primary-600/15">
+              <input type="checkbox" className="mt-0.5 accent-primary-600" checked={!!newPatient.privacyConsent}
+                onChange={(e) => setNewPatient({ ...newPatient, privacyConsent: e.target.checked })} />
+              <span>El paciente leyó el <strong>aviso de privacidad</strong> y aceptó el tratamiento de sus datos, incluidos los de salud. Queda la constancia con fecha y versión del aviso.</span>
             </label>
             <MedicalInfoFields value={newPatientMedicalInfo} onChange={setNewPatientMedicalInfo} idPrefix="patients-new" />
             <details className="group rounded-xl ring-1 ring-slate-200">

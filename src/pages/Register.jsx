@@ -13,6 +13,7 @@ export default function Register() {
   const [touched, setTouched] = useState({})
   const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState('')
+  const [pending, setPending] = useState(null)
   const [loading, setLoading] = useState(false)
 
   const errors = {
@@ -39,7 +40,12 @@ export default function Register() {
     setError('')
     setLoading(true)
     try {
-      await register({ ...form, firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim() })
+      const result = await register({ ...form, firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
+        acceptPrivacyNotice: true })
+      if (result?.pendingActivation) {
+        setPending(result.message)
+        return
+      }
       navigate('/')
     } catch (err) {
       setError(err.response?.data?.message || 'No pudimos crear tu cuenta')
@@ -57,7 +63,13 @@ export default function Register() {
     <AuthShell eyebrow="Pacientes" title="Crea tu cuenta" subtitle="Agenda más rápido, consulta tu historial y recibe avisos de tus citas." wide
       footer={<p>¿Ya tienes cuenta? <Link to="/login" className="font-semibold text-primary-700 hover:underline">Inicia sesión</Link></p>}>
       {error && <FormAlert>{error}</FormAlert>}
-      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+      {pending && (
+        <div className="mb-4 rounded-2xl bg-primary-50 p-4 text-sm text-primary-900 ring-1 ring-inset ring-primary-600/20">
+          <p className="font-semibold">Revisa tu correo</p>
+          <p className="mt-1">{pending}</p>
+        </div>
+      )}
+      <form onSubmit={handleSubmit} className={`space-y-4 ${pending ? 'hidden' : ''}`} noValidate>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="reg-first">Nombre</label>
@@ -88,7 +100,8 @@ export default function Register() {
         </div>
         <label className="flex items-start gap-2.5 text-sm text-slate-600">
           <input type="checkbox" className="mt-0.5 h-4 w-4 rounded accent-primary-600" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
-          <span>Leí y acepto el <Link to="/aviso-de-privacidad" className="font-medium text-primary-700 hover:underline" target="_blank">aviso de privacidad</Link>.</span>
+          <span>Leí y acepto el <Link to="/aviso-de-privacidad" className="font-medium text-primary-700 hover:underline" target="_blank">aviso de privacidad</Link> y
+            doy mi consentimiento expreso para el tratamiento de mis datos de salud.</span>
         </label>
         <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
           {loading ? 'Creando cuenta...' : 'Crear cuenta'}

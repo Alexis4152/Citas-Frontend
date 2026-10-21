@@ -1,4 +1,4 @@
-import { Clock, Globe, Mail, MapPin, MessageCircle, Phone, ShieldCheck } from 'lucide-react'
+import { Clock, Globe, Mail, MapPin, MessageCircle, Phone } from 'lucide-react'
 import { Link } from '../router'
 import { useHospitalConfig } from '../context/HospitalConfigContext'
 import { HospitalLogo } from './ui'
@@ -59,17 +59,23 @@ export default function Footer() {
             <li><Link to="/agendar" className="hover:text-white">Agendar cita</Link></li>
             <li><Link to="/doctores" className="hover:text-white">Doctores</Link></li>
             <li><Link to="/cancelar-cita" className="hover:text-white">Cancelar o reprogramar</Link></li>
-            <li><Link to="/aviso-de-privacidad" className="hover:text-white">Aviso de privacidad</Link></li>
-            <li>
-              <Link to="/derechos-arco" className="inline-flex items-center gap-1.5 hover:text-white">
-                <ShieldCheck className="h-4 w-4 text-primary-300" /> Derechos ARCO
-              </Link>
-            </li>
           </ul>
         </div>
       </div>
-      <div className="relative border-t border-white/[.06] py-5 text-center text-xs text-slate-500">
-        © {year} {config?.legalName || config?.name || 'Hospital'}{config?.rfc && ` · RFC ${config.rfc}`} · Hecho con Nexora Systems
+      <div className="relative border-t border-white/[.06] py-5 text-xs text-slate-500">
+        <div className="container-app space-y-2">
+          <nav className="flex flex-wrap gap-x-5 gap-y-1.5 text-slate-400">
+            <Link to="/terminos-y-condiciones" className="hover:text-white">Términos y condiciones</Link>
+            <Link to="/privacidad" className="hover:text-white">Cómo cuidamos tu privacidad</Link>
+            <Link to="/aviso-de-privacidad" className="hover:text-white">Aviso de privacidad</Link>
+            <Link to="/eliminar-cuenta" className="hover:text-white">Eliminar mi cuenta</Link>
+          </nav>
+          <p>
+            Copyright © {year} {config?.name || 'Hospital'}. Todos los derechos reservados.
+            {config?.legalName && <> Operado por {config.legalName}{config?.rfc && `, RFC ${config.rfc}`}{address && `, con domicilio en ${address}`}.</>}
+            {' '}Hecho con Nexora Systems.
+          </p>
+        </div>
       </div>
     </footer>
   )

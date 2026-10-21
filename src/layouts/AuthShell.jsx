@@ -39,7 +39,7 @@ export default function AuthShell({ eyebrow, title, subtitle, children, footer, 
           </h2>
           <div className="mt-10 grid max-w-md grid-cols-2 gap-3">
             {(inHospital
-              ? [[CalendarCheck2, 'Horarios en vivo', 'Ves lo disponible al momento'], [ShieldCheck, 'Tus datos protegidos', 'Derechos ARCO cuando los pidas']]
+              ? [[CalendarCheck2, 'Horarios en vivo', 'Ves lo disponible al momento'], [ShieldCheck, 'Tus datos protegidos', 'Tú decides sobre tus datos']]
               : [[Stethoscope, 'Datos aislados', 'Cada hospital ve solo lo suyo'], [ShieldCheck, 'Acceso seguro', 'Sesiones cortas y cifradas']]
             ).map(([Icon, t, d]) => (
               <div key={t} className="glass rounded-2xl p-4">

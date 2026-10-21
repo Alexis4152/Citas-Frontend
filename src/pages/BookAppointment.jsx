@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowRight, Building2, CalendarClock, CreditCard, Hourglass, Landmark, Lock, MapPin, Search,
   Stethoscope, Store, Timer, Wallet,
 } from 'lucide-react'
-import { useNavigate } from '../router'
+import { Link, useNavigate } from '../router'
 import { getSpecialties, searchDoctors, getDoctorAvailability } from '../api/publicCatalog'
 import { bookGuestAppointment, bookOwnAppointment } from '../api/appointments'
 import { prepayByToken, prepayOwn } from '../api/payments'
@@ -79,6 +79,7 @@ export default function BookAppointment() {
   const [patient, setPatient] = useState({ firstName: '', lastName: '', phone: '', email: '' })
   const [touched, setTouched] = useState({})
   const [reasonForVisit, setReasonForVisit] = useState('')
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
   const [medicalInfo, setMedicalInfo] = useState(EMPTY_MEDICAL_INFO)
   const [submitting, setSubmitting] = useState(false)
   const [payChoice, setPayChoice] = useState('RECEPTION')
@@ -196,6 +197,10 @@ export default function BookAppointment() {
       notify('Revisa los datos marcados en rojo', 'error')
       return
     }
+    if (!user && !privacyAccepted) {
+      notify('Acepta el aviso de privacidad y el tratamiento de tus datos de salud para continuar', 'error')
+      return
+    }
     setStep(4)
   }
 
@@ -222,6 +227,7 @@ export default function BookAppointment() {
           ...basePayload,
           firstName: patient.firstName.trim(), lastName: patient.lastName.trim(), phone: patient.phone,
           email: patient.email.trim() || undefined,
+          acceptPrivacyNotice: privacyAccepted,
         })
       const appointment = res.data.data
       slotHold.forget()
@@ -385,6 +391,14 @@ export default function BookAppointment() {
                     placeholder="Ej. dolor de cabeza frecuente desde hace una semana" />
                   <p className="field-hint text-right">{reasonForVisit.length}/1000</p>
                 </div>
+                {!user && (
+                  <label className="flex items-start gap-2.5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
+                    <input type="checkbox" className="mt-0.5 h-4 w-4 rounded accent-primary-600" checked={privacyAccepted}
+                      onChange={(e) => setPrivacyAccepted(e.target.checked)} />
+                    <span>Leí y acepto el <Link to="/aviso-de-privacidad" target="_blank" className="font-medium text-primary-700 hover:underline">aviso de privacidad</Link> y doy mi <strong>consentimiento expreso</strong> para
+                      que el hospital trate mis datos de salud (alergias, tipo de sangre y motivo de consulta) para atenderme.</span>
+                  </label>
+                )}
                 <StepNav onBack={() => setStep(2)} submit />
               </form>
             )}

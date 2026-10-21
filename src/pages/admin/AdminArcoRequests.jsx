@@ -1,52 +1,40 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Download, ShieldCheck, XCircle } from 'lucide-react'
-import { ARCO_STATUS, exportArcoData, getArcoRequests, resolveArcoRequest } from '../../api/arco'
+import { AlertTriangle, ChevronRight, Contact, Plus, ShieldCheck } from 'lucide-react'
+import { useNavigate } from '../../router'
+import { ARCO_STATUS, ARCO_TYPES, createInPersonArco, fmtDate, fmtDateTime, getArcoRequests } from '../../api/arco'
+import { searchPatients } from '../../api/reception'
 import { useNotify } from '../../context/NotifyContext'
 import Modal from '../../components/Modal'
-import Drawer, { DetailRow } from '../../components/Drawer'
 import { Badge, EmptyState, PageHeader, Skeleton } from '../../components/ui'
-import { formatDate } from '../../utils/format'
 
 const TABS = [
-  { value: 'PENDING', label: 'Pendientes' },
-  { value: '', label: 'Todas' },
-  { value: 'COMPLETED', label: 'Completadas' },
-  { value: 'REJECTED', label: 'Rechazadas' },
+  { value: '', label: 'Abiertas' },
+  { value: 'PENDING', label: 'Por responder' },
+  { value: 'INFO_REQUESTED', label: 'Esperando al titular' },
+  { value: 'APPROVED', label: 'Por ejecutar' },
+  { value: 'COMPLETED', label: 'Atendidas' },
+  { value: 'REJECTED', label: 'No procedieron' },
+  { value: 'NOT_FILED', label: 'No presentadas' },
 ]
 
-/** Bandeja de solicitudes ARCO del hospital: pendientes primero (las que vencen antes arriba),
- * con descarga de datos para Acceso y resolución con nota que le llega por correo a quien la pidió. */
+/** Bandeja de solicitudes ARCO del hospital: abiertas primero, con su siguiente fecha límite. */
 export default function AdminArcoRequests() {
-  const { notify } = useNotify()
-  const [status, setStatus] = useState('PENDING')
+  const navigate = useNavigate()
+  const [status, setStatus] = useState('')
   const [requests, setRequests] = useState(null)
-  const [resolving, setResolving] = useState(null)
-  const [selected, setSelected] = useState(null)
+  const [inPerson, setInPerson] = useState(false)
 
   const load = () => {
     setRequests(null)
-    getArcoRequests(status).then((r) => setRequests(r.data.data)).catch(() => setRequests([]))
+    getArcoRequests(status).then((r) => setRequests(status ? r.data.data : r.data.data.filter((x) => x.open))).catch(() => setRequests([]))
   }
   useEffect(load, [status])
-
-  async function download(r) {
-    try {
-      const res = await exportArcoData(r.id)
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `datos-personales-${r.folio}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      notify('No se pudieron descargar los datos', 'error')
-    }
-  }
 
   return (
     <div>
       <PageHeader icon={ShieldCheck} eyebrow="Datos personales" title="Solicitudes ARCO"
-        description="Acceso, Rectificación, Cancelación u Oposición. La ley da 20 días hábiles para responder." />
+        description="20 días hábiles para responder, 15 para hacerlo efectivo. Toca una solicitud para atenderla."
+        actions={<button className="btn-primary" onClick={() => setInPerson(true)}><Plus className="h-4 w-4" /> Registrar en mostrador</button>} />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => (
@@ -59,34 +47,35 @@ export default function AdminArcoRequests() {
 
       <div className="card overflow-hidden">
         {!requests ? (
-          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}</div>
+          <div className="space-y-3 p-5">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-16" />)}</div>
         ) : requests.length === 0 ? (
-          <EmptyState icon={ShieldCheck} title={status === 'PENDING' ? 'Sin solicitudes pendientes' : 'Sin solicitudes'}
-            description="Las solicitudes llegan del formulario de derechos ARCO del sitio del hospital." />
+          <EmptyState icon={ShieldCheck} title="Sin solicitudes" description="Llegan del formulario de derechos ARCO, del centro de privacidad de los pacientes o se registran en mostrador." />
         ) : (
           <ul className="divide-y divide-slate-100">
             {requests.map((r) => (
               <li key={r.id}>
-                <button onClick={() => setSelected(r)} className="group flex w-full flex-col gap-4 p-5 text-left transition hover:bg-slate-50 lg:flex-row lg:items-start">
-                  <div className="min-w-0 flex-1 space-y-2">
+                <button onClick={() => navigate(`/admin/solicitudes-arco/${r.id}`)} className="group flex w-full flex-col gap-2 p-5 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={ARCO_STATUS[r.status]?.tone} dot>{r.statusLabel}</Badge>
                       <Badge tone="brand">{r.typeLabel}</Badge>
                       {r.overdue && <Badge tone="red"><AlertTriangle className="h-3 w-3" /> Vencida</Badge>}
+                      {r.identityRequired && r.open && <Badge tone="amber"><Contact className="h-3 w-3" /> Falta identidad</Badge>}
                       <span className="font-mono text-xs text-slate-400">{r.folio}</span>
                     </div>
                     <p className="text-sm font-semibold text-slate-900">{r.requesterName}
-                      <span className="ml-2 font-normal text-slate-500">{r.requesterEmail}{r.requesterPhone ? ` · ${r.requesterPhone}` : ''}</span>
+                      <span className="ml-2 font-normal text-slate-500">{r.requesterEmail}</span>
+                      {r.representative && <span className="ml-2 text-xs font-normal text-slate-500">(por {r.representativeName})</span>}
                     </p>
-                    <p className="text-xs text-slate-500">
-                      Recibida {formatDate(r.createdAt)} · {r.status === 'PENDING' ? <>vence el <strong className={r.overdue ? 'text-rose-600' : 'text-slate-700'}>{new Date(r.dueDate + 'T00:00:00').toLocaleDateString('es-MX', { dateStyle: 'medium' })}</strong></> : <>resuelta {formatDate(r.resolvedAt)} por {r.resolvedByName}</>}
-                      {' · '}{r.hasAccount ? 'Con cuenta' : 'Sin cuenta'}{r.hasPatientRecord ? ' · Es paciente' : ''}
-                    </p>
-                    {r.details && <p className="line-clamp-2 text-sm text-slate-600">{r.details}</p>}
+                    <p className="text-xs text-slate-500">Recibida {fmtDateTime(r.receivedAt || r.createdAt)} · {r.channel === 'IN_PERSON' ? 'Mostrador' : r.channel === 'ACCOUNT' ? 'Cuenta del paciente' : 'Formulario en línea'}</p>
                   </div>
-                  <span className="shrink-0 self-center text-xs font-medium text-slate-400 group-hover:text-primary-700">
-                    {r.status === 'PENDING' ? 'Revisar y resolver ›' : 'Ver detalle ›'}
-                  </span>
+                  {r.nextDeadline && (
+                    <div className="shrink-0 text-right">
+                      <p className="text-[11px] text-slate-400">{r.nextDeadlineLabel}</p>
+                      <p className={`text-sm font-semibold ${r.overdue ? 'text-rose-600' : 'text-slate-800'}`}>{fmtDate(r.nextDeadline)}</p>
+                    </div>
+                  )}
+                  <ChevronRight className="hidden h-4 w-4 text-slate-300 group-hover:text-primary-600 sm:block" />
                 </button>
               </li>
             ))}
@@ -94,90 +83,99 @@ export default function AdminArcoRequests() {
         )}
       </div>
 
-      {selected && (
-        <Drawer open onClose={() => setSelected(null)} title={selected.requesterName} subtitle={`${selected.folio} · ${selected.typeLabel}`}
-          badges={<><Badge tone={ARCO_STATUS[selected.status]?.tone} dot>{selected.statusLabel}</Badge>{selected.overdue && <Badge tone="red">Vencida</Badge>}</>}
-          footer={<div className="flex flex-wrap justify-end gap-2">
-            <button className="btn-secondary" onClick={() => download(selected)} title="Descargar los datos personales de esta persona (derecho de Acceso)">
-              <Download className="h-4 w-4" /> Sus datos
-            </button>
-            {selected.status === 'PENDING' && <button className="btn-primary" onClick={() => { setResolving(selected); setSelected(null) }}>Resolver</button>}
-          </div>}>
-          <div className="space-y-4 text-sm">
-            <DetailRow label="Contacto">{selected.requesterEmail}{selected.requesterPhone ? ` · ${selected.requesterPhone}` : ''}</DetailRow>
-            <DetailRow label="Recibida">{formatDate(selected.createdAt)}</DetailRow>
-            {selected.status === 'PENDING'
-              ? <DetailRow label="Vence">{new Date(selected.dueDate + 'T00:00:00').toLocaleDateString('es-MX', { dateStyle: 'long' })}</DetailRow>
-              : <DetailRow label="Resuelta">{formatDate(selected.resolvedAt)} por {selected.resolvedByName}</DetailRow>}
-            <DetailRow label="En el sistema">{selected.hasAccount ? 'Con cuenta' : 'Sin cuenta'}{selected.hasPatientRecord ? ' · Es paciente' : ''}</DetailRow>
-            {selected.details && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-slate-400">Lo que pide</p>
-                <p className="whitespace-pre-wrap rounded-xl bg-slate-50 px-4 py-3 text-slate-700 ring-1 ring-inset ring-slate-200">{selected.details}</p>
-              </div>
-            )}
-            {selected.resolutionNotes && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-slate-400">Respuesta enviada</p>
-                <p className="whitespace-pre-wrap text-slate-700">{selected.resolutionNotes}</p>
-              </div>
-            )}
-          </div>
-        </Drawer>
-      )}
-
-      {resolving && (
-        <ResolveModal request={resolving} onClose={() => setResolving(null)}
-          onDone={() => { setResolving(null); notify('Solicitud resuelta; se le avisó por correo', 'success'); load() }} />
-      )}
+      {inPerson && <InPersonModal onClose={() => setInPerson(false)} onCreated={(r) => navigate(`/admin/solicitudes-arco/${r.id}`)} />}
     </div>
   )
 }
 
-function ResolveModal({ request, onClose, onDone }) {
+/** Solicitud presencial: titulares sin correo, menores (por su representante) o quien prefiera ir. */
+function InPersonModal({ onClose, onCreated }) {
   const { notify } = useNotify()
-  const [status, setStatus] = useState('COMPLETED')
-  const [notes, setNotes] = useState('')
+  const [q, setQ] = useState('')
+  const [patients, setPatients] = useState([])
+  const [patient, setPatient] = useState(null)
+  const [form, setForm] = useState({ type: '', details: '', contactEmail: '', representative: false, representativeName: '', identityNotes: '' })
   const [saving, setSaving] = useState(false)
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (notes.trim().length < 10) return notify('Explica qué se hizo (mínimo 10 caracteres)', 'error')
+  useEffect(() => {
+    if (q.trim().length < 2) { setPatients([]); return undefined }
+    const t = setTimeout(() => searchPatients({ q: q.trim(), size: 8 }).then((r) => setPatients(r.data.data.content)).catch(() => {}), 300)
+    return () => clearTimeout(t)
+  }, [q])
+
+  async function save() {
+    if (!patient) return notify('Elige al paciente titular', 'error')
+    if (!form.type) return notify('Elige el derecho', 'error')
+    if (form.representative && form.representativeName.trim().length < 5) return notify('Escribe el nombre del representante', 'error')
     setSaving(true)
     try {
-      await resolveArcoRequest(request.id, { status, notes: notes.trim() })
-      onDone()
+      const r = await createInPersonArco({ ...form, patientId: patient.id })
+      notify('Solicitud registrada', 'success')
+      onCreated(r.data.data)
     } catch (err) {
-      notify(err.response?.data?.message || 'No se pudo resolver', 'error')
+      notify(err.response?.data?.message || 'No se pudo registrar', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Modal title={`Resolver ${request.folio}`} description={`${request.typeLabel} · ${request.requesterName}`} icon={ShieldCheck} onClose={() => !saving && onClose()}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-2">
-          {[['COMPLETED', 'Completada', CheckCircle2, 'emerald'], ['REJECTED', 'Rechazada', XCircle, 'rose']].map(([value, label, Icon, color]) => (
-            <label key={value} className={`flex cursor-pointer items-center gap-2 rounded-xl p-3 text-sm font-semibold transition ${status === value
-              ? (color === 'emerald' ? 'bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500' : 'bg-rose-50 text-rose-800 ring-2 ring-rose-500')
-              : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}>
-              <input type="radio" className="sr-only" checked={status === value} onChange={() => setStatus(value)} />
-              <Icon className="h-4 w-4" /> {label}
-            </label>
-          ))}
+    <Modal title="Registrar solicitud en mostrador" description="La identidad se da por verificada en persona: anota qué identificación revisaste." onClose={onClose} maxWidth="max-w-2xl">
+      <div className="space-y-4">
+        <div>
+          <label className="label">Paciente titular</label>
+          {patient ? (
+            <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2.5 ring-1 ring-slate-200">
+              <span className="text-sm font-medium text-slate-900">{patient.firstName} {patient.lastName} <span className="font-normal text-slate-500">· {patient.phone}</span></span>
+              <button className="btn-ghost btn-sm" onClick={() => setPatient(null)}>Cambiar</button>
+            </div>
+          ) : (
+            <>
+              <input className="input" placeholder="Busca por nombre, teléfono o correo" value={q} onChange={(e) => setQ(e.target.value)} />
+              {patients.length > 0 && (
+                <ul className="mt-1 max-h-48 overflow-y-auto rounded-xl ring-1 ring-slate-200">
+                  {patients.map((p) => (
+                    <li key={p.id}><button className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50" onClick={() => setPatient(p)}>{p.firstName} {p.lastName} · {p.phone}{p.email ? ` · ${p.email}` : ''}</button></li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </div>
         <div>
-          <label className="label">Nota para quien la pidió</label>
-          <textarea rows={5} maxLength={2000} className="input" value={notes} onChange={(e) => setNotes(e.target.value)}
-            placeholder={status === 'COMPLETED' ? 'Ej. Corregimos tu apellido en tu expediente.' : 'Ej. No pudimos verificar tu identidad; acude a recepción con una identificación.'} />
-          <p className="field-hint">Se le envía por correo y queda como constancia.</p>
+          <label className="label">Derecho</label>
+          <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+            <option value="">Elige...</option>
+            {ARCO_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
         </div>
+        <div>
+          <label className="label">Lo que pide</label>
+          <textarea rows={3} className="input" value={form.details} onChange={(e) => setForm({ ...form, details: e.target.value })} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="label">Correo para responderle <span className="font-normal text-slate-400">(opcional)</span></label>
+            <input type="email" className="input" placeholder={patient?.email || 'Si no tiene, se le entrega en mostrador'} value={form.contactEmail}
+              onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Identificación revisada</label>
+            <input className="input" placeholder="Ej. INE vigente, coincide con el expediente" value={form.identityNotes} onChange={(e) => setForm({ ...form, identityNotes: e.target.value })} />
+          </div>
+        </div>
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary-600" checked={form.representative} onChange={(e) => setForm({ ...form, representative: e.target.checked })} />
+          La presenta un representante (padre, madre, tutor o apoderado) con documento que lo acredita.
+        </label>
+        {form.representative && (
+          <input className="input" placeholder="Nombre completo del representante" value={form.representativeName} onChange={(e) => setForm({ ...form, representativeName: e.target.value })} />
+        )}
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-          <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Guardando...' : 'Guardar y avisar'}</button>
+          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="btn-primary" disabled={saving} onClick={save}>{saving ? 'Registrando...' : 'Registrar solicitud'}</button>
         </div>
-      </form>
+      </div>
     </Modal>
   )
 }

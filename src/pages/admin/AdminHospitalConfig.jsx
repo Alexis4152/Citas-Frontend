@@ -147,6 +147,27 @@ export default function AdminHospitalConfig() {
             <Field label="WhatsApp"><input className="input" {...PHONE_INPUT_PROPS} value={form.whatsapp || ''} onChange={(e) => update('whatsapp', onlyDigits(e.target.value))} /></Field>
             <Field label="Horario de atención" className="sm:col-span-2"><input maxLength={200} className="input" placeholder="Lunes a viernes 8:00–20:00 · Sábado 9:00–14:00" value={form.openingHours || ''} onChange={(e) => update('openingHours', e.target.value)} /></Field>
 
+            <SectionTitle>Privacidad y datos personales</SectionTitle>
+            <Field label="Responsable de datos personales"><input maxLength={150} className="input" placeholder="Departamento de Datos Personales"
+              value={form.privacyContactName || ''} onChange={(e) => update('privacyContactName', e.target.value)} /></Field>
+            <Field label="Correo para datos personales"><input type="email" maxLength={150} className="input" placeholder="privacidad@mihospital.com"
+              value={form.privacyContactEmail || ''} onChange={(e) => update('privacyContactEmail', e.target.value.trim())} /></Field>
+            <Field label="Años que se conserva el expediente clínico"><input type="number" min={5} max={30} className="input"
+              value={form.clinicalRetentionYears ?? 5} onChange={(e) => update('clinicalRetentionYears', Number(e.target.value))} />
+              <span className="mt-1 block text-xs text-slate-400">La NOM-004 pide mínimo 5 años desde la última atención.</span></Field>
+            <Field label="Años que se conservan los pagos"><input type="number" min={5} max={30} className="input"
+              value={form.fiscalRetentionYears ?? 5} onChange={(e) => update('fiscalRetentionYears', Number(e.target.value))} />
+              <span className="mt-1 block text-xs text-slate-400">Obligaciones fiscales; confírmalo con tu contador.</span></Field>
+            <label className="sm:col-span-2 flex items-start gap-3 rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
+              <input type="checkbox" className="mt-1 h-4 w-4 accent-primary-600" checked={!!form.publishPrivacyNotice}
+                onChange={(e) => update('publishPrivacyNotice', e.target.checked)} />
+              <span>
+                <span className="block font-medium text-slate-800">Publicar una nueva versión del aviso de privacidad</span>
+                <span className="block text-xs text-slate-500">Versión actual: {form.privacyNoticeVersion || 1}. Márcalo cuando cambien los datos del responsable, las
+                  finalidades o los plazos: la versión anterior queda consultable y las nuevas aceptaciones se registran con la nueva versión.</span>
+              </span>
+            </label>
+
             <SectionTitle>Citas sin confirmar</SectionTitle>
             <div className="sm:col-span-2 rounded-xl bg-slate-50 p-4 ring-1 ring-inset ring-slate-200">
               <label className="flex cursor-pointer items-start gap-3">

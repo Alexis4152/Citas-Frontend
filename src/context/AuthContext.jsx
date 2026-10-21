@@ -86,6 +86,8 @@ export function AuthProvider({ children }) {
 
   async function register(payload) {
     const res = await apiRegister(payload)
+    // Ya había un expediente con ese correo: la cuenta se activa desde el enlace del correo.
+    if (res.data.data?.pendingActivation) return { pendingActivation: true, message: res.data.message }
     const { token, user: userData } = res.data.data
     setAccessToken(token)
     localStorage.setItem(sessionStorageKey(), JSON.stringify(userData))

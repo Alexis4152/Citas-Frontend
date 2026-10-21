@@ -21,6 +21,7 @@ import { Avatar, Badge, EmptyState, Skeleton } from '../../components/ui'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../../utils/phone'
 import { nameError, emailError, phoneError } from '../../utils/validators'
 import { staffBasePath } from '../../utils/staffPath'
+import PatientPrivacyPanel from '../../components/PatientPrivacyPanel'
 
 const STATUS_TABS = [
   { value: '', label: 'Todas' },
@@ -192,6 +193,8 @@ export default function ReceptionPatientDetail() {
   }
 
   const addr = address(patient)
+  // Un expediente bloqueado o anónimo (Cancelación ARCO) ya no se edita.
+  const editable = canEdit && (!patient.privacyStatus || patient.privacyStatus === 'ACTIVE')
 
   return (
     <div>
@@ -212,7 +215,7 @@ export default function ReceptionPatientDetail() {
                   <Badge tone={patient.hasAccount ? 'green' : 'slate'}>{patient.hasAccount ? 'Con cuenta' : 'Sin cuenta'}</Badge>
                 </div>
               </div>
-              {canEdit && <button onClick={openEditProfile} className="btn-secondary btn-sm"><Pencil className="h-3.5 w-3.5" /> Editar datos</button>}
+              {editable && <button onClick={openEditProfile} className="btn-secondary btn-sm"><Pencil className="h-3.5 w-3.5" /> Editar datos</button>}
             </div>
             <dl className="mt-4 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
               <Info icon={Phone} label="Contacto">{patient.phone}{patient.email && <span className="block text-slate-500">{patient.email}</span>}</Info>
@@ -235,13 +238,15 @@ export default function ReceptionPatientDetail() {
           {patient.medicalInfoUpdatedAt && (
             <span className="text-xs text-slate-400">Actualizada por {patient.medicalInfoUpdatedByName || 'el propio paciente (invitado)'}, {formatDate(patient.medicalInfoUpdatedAt)}</span>
           )}
-          {canEdit && (
+          {editable && (
             <button className="btn-ghost btn-sm ml-auto" onClick={() => { setMedicalInfoForm(fromPatientResponse(patient)); setEditingMedicalInfo(true) }}>
               <Pencil className="h-3.5 w-3.5" /> Información médica
             </button>
           )}
         </div>
       </div>
+
+      <PatientPrivacyPanel patient={patient} />
 
       {duplicates.length > 0 && (
         <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">

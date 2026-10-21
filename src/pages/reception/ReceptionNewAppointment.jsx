@@ -49,7 +49,7 @@ export default function ReceptionNewAppointment() {
   const [searching, setSearching] = useState(false)
   const [patient, setPatient] = useState(null)
   const [showNewPatient, setShowNewPatient] = useState(false)
-  const [newPatient, setNewPatient] = useState({ firstName: '', lastName: '', phone: '', email: '', createAccount: false })
+  const [newPatient, setNewPatient] = useState({ firstName: '', lastName: '', phone: '', email: '', createAccount: false, privacyConsent: false })
   const [newPatientMedicalInfo, setNewPatientMedicalInfo] = useState(EMPTY_MEDICAL_INFO)
   const [creatingPatient, setCreatingPatient] = useState(false)
   const [newPatientCredentials, setNewPatientCredentials] = useState(null)
@@ -117,6 +117,10 @@ export default function ReceptionNewAppointment() {
     e.preventDefault()
     if (newPatient.phone.length !== 10) {
       notify('El teléfono debe tener exactamente 10 dígitos', 'error')
+      return
+    }
+    if (!newPatient.privacyConsent) {
+      notify('Confirma que el paciente aceptó el aviso de privacidad', 'error')
       return
     }
     if (newPatient.createAccount && !newPatient.email) {
@@ -291,6 +295,11 @@ export default function ReceptionNewAppointment() {
                     <span>Crear cuenta de acceso — le llegará una contraseña temporal por correo.</span>
                   </label>
                   {/* Obligatorio: el doctor lo necesita para poder recetar con seguridad. */}
+                  <label className="flex items-start gap-2 rounded-xl bg-primary-50/60 p-3 text-sm text-slate-700 ring-1 ring-inset ring-primary-600/15">
+                    <input type="checkbox" className="mt-0.5 accent-primary-600" checked={!!newPatient.privacyConsent}
+                      onChange={(e) => setNewPatient({ ...newPatient, privacyConsent: e.target.checked })} />
+                    <span>El paciente leyó el <strong>aviso de privacidad</strong> y aceptó el tratamiento de sus datos, incluidos los de salud. Queda la constancia con fecha y versión del aviso.</span>
+                  </label>
                   <MedicalInfoFields value={newPatientMedicalInfo} onChange={setNewPatientMedicalInfo} idPrefix="new-patient" />
                   <div className="flex gap-2 justify-end">
                     <button type="button" className="btn-secondary text-sm" onClick={() => setShowNewPatient(false)}>Cancelar</button>

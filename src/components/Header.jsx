@@ -76,7 +76,7 @@ export default function Header() {
                     {role === 'PATIENT' && (
                       <>
                         <MenuLink to="/mis-citas" icon={CalendarCheck2} onClick={() => setAccountOpen(false)}>Mis citas</MenuLink>
-                        <MenuLink to="/mis-solicitudes-arco" icon={ShieldCheck} onClick={() => setAccountOpen(false)}>Mis datos personales (ARCO)</MenuLink>
+                        <MenuLink to="/mi-privacidad" icon={ShieldCheck} onClick={() => setAccountOpen(false)}>Mi privacidad y mis datos</MenuLink>
                       </>
                     )}
                     {staffHome && (
@@ -113,7 +113,7 @@ export default function Header() {
             {user ? (
               <>
                 {role === 'PATIENT' && <MobileLink to="/mis-citas" icon={CalendarCheck2} onClick={() => setMobileOpen(false)}>Mis citas</MobileLink>}
-                {role === 'PATIENT' && <MobileLink to="/mis-solicitudes-arco" icon={ShieldCheck} onClick={() => setMobileOpen(false)}>Mis datos personales (ARCO)</MobileLink>}
+                {role === 'PATIENT' && <MobileLink to="/mi-privacidad" icon={ShieldCheck} onClick={() => setMobileOpen(false)}>Mi privacidad y mis datos</MobileLink>}
                 {staffHome && <MobileLink to={staffHome} icon={LayoutDashboard} onClick={() => setMobileOpen(false)}>{STAFF_LABEL[role]}</MobileLink>}
                 <button className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left text-rose-600 hover:bg-rose-50" onClick={handleLogout}>
                   <LogOut className="h-4 w-4" /> Cerrar sesión
