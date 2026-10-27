@@ -5,7 +5,7 @@ import { getSpecialties, searchDoctors } from '../api/publicCatalog'
 import { getOwnPatient, updateOwnMedicalInfo } from '../api/patients'
 import { useNotify } from '../context/NotifyContext'
 import { downloadBlob } from '../utils/media'
-import { formatDateOnly, formatTimeOnly } from '../utils/format'
+import { formatDateOnly, formatTimeOnly, localTodayIso } from '../utils/format'
 import LoadingOverlay from '../components/LoadingOverlay'
 import { AppointmentBadges } from '../components/StatusBadge'
 import AppointmentDetailCard from '../components/AppointmentDetailCard'
@@ -21,7 +21,7 @@ import MedicalInfoFields, {
 import usePersistedState from '../hooks/usePersistedState'
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return localTodayIso()
 }
 
 const EMPTY_FILTERS = { specialtyId: '', doctorId: '', from: '', to: '' }

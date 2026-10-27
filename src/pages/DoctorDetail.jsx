@@ -10,9 +10,10 @@ import useAvailabilityStream from '../hooks/useAvailabilityStream'
 import { holderKey } from '../api/slotHolds'
 import { resolveMediaUrl } from '../utils/media'
 import { formatMoney, hasPrice } from '../utils/money'
+import { localTodayIso } from '../utils/format'
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return localTodayIso()
 }
 
 function addDaysIso(iso, n) {

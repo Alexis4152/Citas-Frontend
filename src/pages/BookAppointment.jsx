@@ -22,13 +22,13 @@ import usePolling from '../hooks/usePolling'
 import useAvailabilityStream from '../hooks/useAvailabilityStream'
 import { EMPTY_CARD, isOnlinePaymentEnabled, tokenizeFields } from '../utils/openpay'
 import { formatMoney, hasPrice } from '../utils/money'
-import { formatDateOnly, formatTimeOnly } from '../utils/format'
+import { formatDateOnly, formatTimeOnly, localTodayIso } from '../utils/format'
 import { onlyDigits, PHONE_INPUT_PROPS } from '../utils/phone'
 import { resolveMediaUrl } from '../utils/media'
 import { emailError, nameError, phoneError } from '../utils/validators'
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return localTodayIso()
 }
 
 function addDaysIso(iso, n) {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarX2, Check, ChevronLeft, ChevronRight, Lock, Moon, Sun, Sunrise } from 'lucide-react'
-import { formatTimeOnly } from '../utils/format'
+import { formatTimeOnly, localTodayIso } from '../utils/format'
 
 /**
  * Selector de horarios: tira de días (cuántos horarios libres tiene cada uno) y, debajo, los
@@ -45,7 +45,7 @@ export default function SlotPicker({
     return <p className="py-10 text-center text-sm text-slate-500">No hay información de disponibilidad.</p>
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localTodayIso()
   const day = daysWithInfo[Math.min(dayIndex, daysWithInfo.length - 1)]
   const groups = [
     { key: 'm', label: 'Mañana', icon: Sunrise, test: (h) => h < 12 },

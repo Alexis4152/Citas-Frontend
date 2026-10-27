@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { formatDateOnly, formatTimeOnly } from '../utils/format'
+import { formatDateOnly, formatTimeOnly, localTodayIso } from '../utils/format'
 import SlotPicker from './SlotPicker'
 
 /**
@@ -62,7 +62,7 @@ export default function AvailabilityCalendar({
     return <p className="text-sm text-gray-500 py-8 text-center">Sin horarios configurados para estas fechas.</p>
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localTodayIso()
 
   function slotsAt(day, time) {
     return day.slots.filter((s) => s.startTime === time)

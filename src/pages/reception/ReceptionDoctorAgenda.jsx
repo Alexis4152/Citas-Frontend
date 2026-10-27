@@ -13,11 +13,11 @@ import AppointmentDetailCard from '../../components/AppointmentDetailCard'
 import ChargeModal from '../../components/ChargeModal'
 import LoadingOverlay from '../../components/LoadingOverlay'
 import { downloadBlob } from '../../utils/media'
-import { formatDateOnly } from '../../utils/format'
+import { formatDateOnly, localTodayIso } from '../../utils/format'
 import usePersistedState from '../../hooks/usePersistedState'
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return localTodayIso()
 }
 
 function addDays(iso, n) {
